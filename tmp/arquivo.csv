@@ -1,0 +1,45 @@
+item,categoria,descrição,unidade de medida
+Arroz Tipo 1,Alimentos Não Perecíveis,Pacote de 1kg ou 5kg,Kg
+Feijão Carioca,Alimentos Não Perecíveis,Pacote de 1kg,Kg
+Macarrão Espaguete,Alimentos Não Perecíveis,Pacote de 500g,Unidade
+Óleo de Soja,Alimentos Não Perecíveis,Garrafa de 900ml,Unidade
+Açúcar Refinado,Alimentos Não Perecíveis,Pacote de 1kg,Kg
+Sal Refinado,Alimentos Não Perecíveis,Pacote de 1kg,Kg
+Café em Pó,Alimentos Não Perecíveis,Pacote de 500g,Unidade
+Leite em Pó,Alimentos Não Perecíveis,Lata ou pacote de 400g,Unidade
+Farinha de Trigo,Alimentos Não Perecíveis,Pacote de 1kg,Kg
+Fubá,Alimentos Não Perecíveis,Pacote de 500g,Unidade
+Extrato de Tomate,Alimentos Não Perecíveis,Lata ou sachê,Unidade
+Biscoito (Água e Sal),Alimentos Não Perecíveis,,Pacote
+Biscoito (Doce),Alimentos Não Perecíveis,,Pacote
+Achocolatado em Pó,Alimentos Não Perecíveis,Lata de 400g,Unidade
+Sabonete,Higiene Pessoal,,Unidade
+Creme Dental,Higiene Pessoal,,Unidade
+Escova de Dente Adulto,Higiene Pessoal,,Unidade
+Escova de Dente Infantil,Higiene Pessoal,,Unidade
+Shampoo,Higiene Pessoal,Frasco,Unidade
+Condicionador,Higiene Pessoal,Frasco,Unidade
+Papel Higiênico,Higiene Pessoal,Pacote com 4 rolos,Pacote
+Absorvente Higiênico,Higiene Pessoal,,Pacote
+Fralda Descartável P/M/G/XG,Higiene Pessoal,Infantil,Pacote
+Fralda Geriátrica M/G,Higiene Pessoal,Adulto,Pacote
+Lenços Umedecidos,Higiene Pessoal,,Pacote
+Água Sanitária,Produtos de Limpeza,Garrafa de 1L ou 2L,Litro
+Desinfetante,Produtos de Limpeza,Garrafa de 1L ou 2L,Litro
+Detergente Líquido,Produtos de Limpeza,Frasco de 500ml,Unidade
+Sabão em Pó,Produtos de Limpeza,Caixa de 1kg,Caixa
+Sabão em Pedra,Produtos de Limpeza,,Unidade
+Esponja de Aço,Produtos de Limpeza,,Pacote
+Esponja Multiuso,Produtos de Limpeza,,Unidade
+Calça Adulto,Roupas e Calçados,Tamanhos variados,Peça
+Camiseta Adulto,Roupas e Calçados,Tamanhos variados,Peça
+Agasalho Adulto,Roupas e Calçados,Tamanhos variados,Peça
+Calça Infantil,Roupas e Calçados,Tamanhos variados,Peça
+Camiseta Infantil,Roupas e Calçados,Tamanhos variados,Peça
+Agasalho Infantil,Roupas e Calçados,Tamanhos variados,Peça
+Calçado Adulto,Roupas e Calçados,,Par
+Calçado Infantil,Roupas e Calçados,,Par
+Cobertor Casal/Solteiro,"Cama, Mesa e Banho",,Peça
+Lençol Casal/Solteiro,"Cama, Mesa e Banho",,Jogo
+Toalha de Banho,"Cama, Mesa e Banho",,Peça
+Toalha de Rosto,"Cama, Mesa e Banho",,Peça

@@ -1,0 +1,60 @@
+# Arquivo .gitignore para o projeto Fundo Social (Django + Vue)
+
+# # # AMBIENTES VIRTUAIS E DEPENDÊNCIAS # # #
+# Ignora a pasta do ambiente virtual do Python. É a regra mais importante.
+/venv/
+# Ignora a pasta de dependências do Node.js do nosso frontend.
+/frontend/node_modules/
+
+
+# # # SEGREDOS E CONFIGURAÇÕES LOCAIS # # #
+# Ignora o arquivo de variáveis de ambiente que contém senhas e a SECRET_KEY.
+# ESSA É A REGRA DE SEGURANÇA MAIS IMPORTANTE.
+.env
+backend/.env
+frontend/.env.local
+frontend/.env.*.local
+
+
+# # # ARQUIVOS DE CACHE E COMPILADOS DO PYTHON (DJANGO) # # #
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+
+# # # ARQUIVOS DE BUILD E PACOTES DO FRONTEND (VUE) # # #
+# Ignora a pasta de build do Vue
+/frontend/dist/
+# Logs de erro do npm/yarn
+npm-debug.log*
+yarn-error.log
+# Arquivos de lock de pacotes (opcional, mas bom para projetos solo/pequenos)
+# yarn.lock
+# package-lock.json
+
+
+# # # BANCOS DE DADOS LOCAIS # # #
+# Caso você use SQLite para testes locais
+*.sqlite3
+db.sqlite3
+
+
+# # # ARQUIVOS ESTÁTICOS E DE MÍDIA COLETADOS PELO DJANGO # # #
+# Pastas onde o Django junta os arquivos estáticos e de upload em produção
+/backend/staticfiles/
+/backend/mediafiles/
+
+
+# # # ARQUIVOS DE IDEs E EDITORES DE CÓDIGO # # #
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+
+# # # ARQUIVOS DE SISTEMA OPERACIONAL # # #
+# macOS
+.DS_Store
+# Windows
+Thumbs.db
