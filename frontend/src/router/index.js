@@ -1,4 +1,5 @@
 import AppLayout from '@/layout/AppLayout.vue';
+import ReportBlankLayout from '@/layout/ReportBlankLayout.vue';
 import { createRouter, createWebHistory } from 'vue-router';
 
 const router = createRouter({
@@ -72,26 +73,6 @@ const router = createRouter({
                     path: '/doacoes/saida/:id',
                     name: 'EditarSaidaDoacao',
                     component: () => import('@/views/pages/SaidaDoacao.vue')
-                },
-                {
-                    path: '/relatorios/entidades',
-                    name: 'RelatorioEntidades',
-                    component: () => import('@/views/relatorios/RelatorioEntidades.vue')
-                },
-                {
-                    path: '/relatorios/entidade/:id',
-                    name: 'RelatorioEntidade',
-                    component: () => import('@/views/relatorios/RelatorioEntidade.vue')
-                },
-                {
-                    path: '/relatorios/entrada/:id',
-                    name: 'RelatorioEntrada',
-                    component: () => import('@/views/relatorios/RelatorioEntrada.vue')
-                },
-                {
-                    path: '/relatorios/saida/:id',
-                    name: 'RelatorioSaida',
-                    component: () => import('@/views/relatorios/RelatorioSaida.vue')
                 },
                 {
                     path: '/uikit/formlayout',
@@ -184,6 +165,16 @@ const router = createRouter({
                     name: 'documentation',
                     component: () => import('@/views/pages/Documentation.vue')
                 }
+            ]
+        },
+        {
+            path: '/relatorios',
+            component: ReportBlankLayout,
+            children: [
+              { path: 'entidades', name: 'RelatorioEntidades', component: () => import('@/views/relatorios/RelatorioEntidades.vue') },
+              { path: 'entidade/:id', name: 'RelatorioEntidade', component: () => import('@/views/relatorios/RelatorioEntidade.vue') },
+              { path: 'entrada/:id', name: 'RelatorioEntrada', component: () => import('@/views/relatorios/RelatorioEntrada.vue') },
+              { path: 'saida/:id',   name: 'RelatorioSaida',   component: () => import('@/views/relatorios/RelatorioSaida.vue') }
             ]
         },
         {

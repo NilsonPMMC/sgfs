@@ -27,8 +27,8 @@ const printNow = () => window.print();
     </main>
 
     <footer class="report__footer">
-      <span>SGFS • Gerado em: {{ new Date().toLocaleString() }}</span>
-      <span class="page-number print-only">Página <span class="counter"></span></span>
+      <small>SGFS • Gerado em: {{ new Date().toLocaleString() }}</small>
+      <small class="page-number print-only">Página <span class="counter"></span></small>
     </footer>
   </div>
 </template>
@@ -62,8 +62,18 @@ const printNow = () => window.print();
   .print-only { display: inline; }
   .report { max-width: none; }
   .report-logo { margin-bottom: 0.5rem; }
-  @page { margin: 12mm; }
+  @page { 
+    margin: 12mm;
+    size: auto;
+    }
   .counter:after { counter-increment: page; content: counter(page); }
   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html::before,
+  html::after,
+  body::before,
+  body::after {
+    display: none !important;
+    content: none !important;
+  }
 }
 </style>

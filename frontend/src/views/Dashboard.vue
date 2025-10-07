@@ -167,8 +167,9 @@ watch(isDarkTheme, () => {
         <ProgressSpinner />
     </div>
     <div v-else-if="dashboardData" class="grid grid-cols-12 gap-8">
+
         <div class="col-span-12 xl:col-span-6">
-            <div class="card mb-0">
+            <div class="card">
                 <div class="flex justify-between mb-4">
                     <div>
                         <span class="block text-muted-color font-medium mb-4">Aniversariantes da Semana</span>
@@ -192,57 +193,7 @@ watch(isDarkTheme, () => {
                     <p class="text-500">Nenhum aniversariante na semana.</p>
                 </div>
             </div>
-        </div>
-        <div class="col-span-12 xl:col-span-6">
-            <div class="card mb-0">
-            <div class="flex justify-between mb-4">
-                <div>
-                <span class="block text-muted-color font-medium mb-4">Notificações</span>
-                <div class="text-surface-900 dark:text-surface-0 font-medium text-xl">
-                    {{ alertas.length }} pendente(s)
-                </div>
-                </div>
-                <div class="flex items-center justify-center bg-orange-100 dark:bg-orange-400/10 rounded-border" style="width: 2.5rem; height: 2.5rem">
-                <i class="pi pi-bell text-orange-500 !text-xl"></i>
-                </div>
-            </div>
 
-            <div v-if="alertasLoading">
-                <p>Carregando...</p>
-            </div>
-            <ul v-else-if="alertas.length" class="p-0 mx-0 mt-0 mb-6 list-none">
-                <li v-for="a in alertas" :key="a.id" class="flex items-start py-3 border-b border-surface">
-                <div class="w-10 h-10 flex items-center justify-center bg-orange-100 dark:bg-orange-400/10 rounded-full mr-4 shrink-0">
-                    <i class="pi pi-exclamation-triangle text-orange-500"></i>
-                </div>
-                <div class="flex-1">
-                    <div class="font-semibold">{{ a.mensagem }}</div>
-                    <small class="text-500">Criado em: {{ formatarDataBR(a.criado_em) }}</small>
-                </div>
-                </li>
-            </ul>
-            <div v-else>
-                <p class="text-500">Nenhuma notificação pendente.</p>
-            </div>
-            </div>
-        </div>
-        <div class="col-span-12 xl:col-span-6">
-            <div class="card mb-0">
-                <div class="flex justify-between mb-4">
-                    <div>
-                        <span class="block text-muted-color font-medium mb-4">Estoque</span>
-                        <div class="text-surface-900 dark:text-surface-0 font-medium text-xl">{{ dashboardData.indicadores_estoque.total_itens }} Itens Cadastrados</div>
-                    </div>
-                    <div class="flex items-center justify-center bg-blue-100 dark:bg-blue-400/10 rounded-border" style="width: 2.5rem; height: 2.5rem">
-                        <i class="pi pi-box text-blue-500 !text-xl"></i>
-                    </div>
-                </div>
-                <span class="text-red-500 font-medium">{{ dashboardData.indicadores_estoque.itens_zerados }} itens zerados </span>
-                <span class="text-500">| </span>
-                <span class="text-orange-500 font-medium">{{ dashboardData.indicadores_estoque.itens_estoque_baixo }} com estoque baixo</span>
-            </div>
-        </div>
-        <div class="col-span-12 xl:col-span-6">
             <div class="card mb-0">
                 <div class="flex justify-between mb-4">
                     <div>
@@ -257,12 +208,12 @@ watch(isDarkTheme, () => {
                 <span class="text-500">| </span>
                 <span class="text-purple-500 font-medium">{{ dashboardData.indicadores_doacoes.saidas_30d }} Saídas</span>
             </div>
-        </div>
-        <div class="col-span-12 xl:col-span-6">
+
             <div class="card">
                 <div class="font-semibold text-xl mb-4">Movimentações Mensais ({{ new Date().getFullYear() }})</div>
                 <Chart type="line" :data="movimentacoesLineData" :options="lineOptions"></Chart>
             </div>
+
             <div class="card">
                 <div class="font-semibold text-xl mb-4">Top 5 Entidades Gestoras</div>
                 <Chart type="bar" :data="rankingEntidadesBarData" :options="barOptions" class="mb-4"></Chart>
@@ -272,11 +223,60 @@ watch(isDarkTheme, () => {
                 </DataTable>
             </div>
         </div>
+
         <div class="col-span-12 xl:col-span-6">
+            <div class="card">
+                <div class="flex justify-between mb-4">
+                    <div>
+                    <span class="block text-muted-color font-medium mb-4">Notificações</span>
+                    <div class="text-surface-900 dark:text-surface-0 font-medium text-xl">
+                        {{ alertas.length }} pendente(s)
+                    </div>
+                    </div>
+                    <div class="flex items-center justify-center bg-orange-100 dark:bg-orange-400/10 rounded-border" style="width: 2.5rem; height: 2.5rem">
+                    <i class="pi pi-bell text-orange-500 !text-xl"></i>
+                    </div>
+                </div>
+
+                <div v-if="alertasLoading">
+                    <p>Carregando...</p>
+                </div>
+                <ul v-else-if="alertas.length" class="p-0 mx-0 mt-0 mb-6 list-none">
+                    <li v-for="a in alertas" :key="a.id" class="flex items-start py-3 border-b border-surface">
+                    <div class="w-10 h-10 flex items-center justify-center bg-orange-100 dark:bg-orange-400/10 rounded-full mr-4 shrink-0">
+                        <i class="pi pi-exclamation-triangle text-orange-500"></i>
+                    </div>
+                    <div class="flex-1">
+                        <div class="font-semibold">{{ a.mensagem }}</div>
+                        <small class="text-500">Criado em: {{ formatarDataBR(a.criado_em) }}</small>
+                    </div>
+                    </li>
+                </ul>
+                <div v-else>
+                    <p class="text-500">Nenhuma notificação pendente.</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="flex justify-between mb-4">
+                    <div>
+                        <span class="block text-muted-color font-medium mb-4">Estoque</span>
+                        <div class="text-surface-900 dark:text-surface-0 font-medium text-xl">{{ dashboardData.indicadores_estoque.total_itens }} Itens Cadastrados</div>
+                    </div>
+                    <div class="flex items-center justify-center bg-blue-100 dark:bg-blue-400/10 rounded-border" style="width: 2.5rem; height: 2.5rem">
+                        <i class="pi pi-box text-blue-500 !text-xl"></i>
+                    </div>
+                </div>
+                <span class="text-red-500 font-medium">{{ dashboardData.indicadores_estoque.itens_zerados }} itens zerados </span>
+                <span class="text-500">| </span>
+                <span class="text-orange-500 font-medium">{{ dashboardData.indicadores_estoque.itens_estoque_baixo }} com estoque baixo</span>
+            </div>
+
             <div class="card flex flex-col items-center">
                 <div class="font-semibold text-xl mb-4">Situação do Estoque</div>
                 <Chart type="doughnut" :data="estoquePieData" :options="pieOptions"></Chart>
             </div>
+
             <div class="card">
                 <div class="font-semibold text-xl mb-4">Top 5 Doadores</div>
                 <Chart type="bar" :data="rankingDoadoresBarData" :options="barOptions" class="mb-4"></Chart>
@@ -286,6 +286,7 @@ watch(isDarkTheme, () => {
                 </DataTable>
             </div>
         </div>
+
     </div>
 </template>
 
