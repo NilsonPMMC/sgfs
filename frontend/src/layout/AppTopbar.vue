@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/store/auth';
 import axios from 'axios';
 import AppConfigurator from './AppConfigurator.vue';
+import NotificationBell from '@/components/NotificationBell.vue';
 
 const { toggleMenu, toggleDarkMode, isDarkTheme, onMenuToggle } = useLayout();
 const router = useRouter();
@@ -73,16 +74,7 @@ const handleLogout = () => {
 
             <div class="layout-topbar-menu hidden lg:block">
                 <div class="layout-topbar-menu-content">
-                    <button type="button" class="layout-topbar-action" @click="op.toggle($event)">
-                        <i class="pi pi-bell"></i>
-                        <span>Notificações</span>
-                    </button>
-                    <OverlayPanel ref="op">
-                        <div class="p-4">
-                            <h5>Notificações</h5>
-                            <p>Funcionalidade a ser implementada.</p>
-                        </div>
-                    </OverlayPanel>
+                    <NotificationBell />
 
                     <button type="button" class="layout-topbar-action" @click="us.toggle($event)">
                         <i class="pi pi-user"></i>
@@ -114,5 +106,8 @@ const handleLogout = () => {
   font-weight: 700;
   color: var(--text-color, #ffffff);
   font-size: 1.1rem;
+}
+.p-overlaybadge{
+    display: none !important;
 }
 </style>

@@ -23,6 +23,45 @@ app.use(createPinia());
 
 app.use(router);
 app.use(PrimeVue, {
+    ripple: true,
+    locale: {
+        // Calendário
+        dayNames: ['domingo','segunda','terça','quarta','quinta','sexta','sábado'],
+        dayNamesShort: ['dom','seg','ter','qua','qui','sex','sáb'],
+        dayNamesMin: ['D','S','T','Q','Q','S','S'],
+        monthNames: ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'],
+        monthNamesShort: ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'],
+        today: 'Hoje',
+        clear: 'Limpar',
+        weekHeader: 'Sem',
+        firstDayOfWeek: 0,           // domingo
+        dateFormat: 'dd/mm/yy',      // exibirá 4 dígitos no ano
+
+        // Textos genéricos
+        startsWith: 'Começa com',
+        contains: 'Contém',
+        notContains: 'Não contém',
+        endsWith: 'Termina com',
+        equals: 'Igual',
+        notEquals: 'Diferente',
+        noFilter: 'Sem filtro',
+        lt: 'Menor que',
+        lte: 'Menor ou igual a',
+        gt: 'Maior que',
+        gte: 'Maior ou igual a',
+        is: 'É',
+        isNot: 'Não é',
+        before: 'Antes',
+        after: 'Depois',
+        clearFilter: 'Limpar filtro',
+        apply: 'Aplicar',
+        matchAll: 'Combinar todos',
+        matchAny: 'Combinar qualquer',
+        addRule: 'Adicionar regra',
+        removeRule: 'Remover regra',
+        accept: 'Sim',
+        reject: 'Não'
+    },
     theme: {
         preset: Aura,
         options: {

@@ -44,6 +44,16 @@ const router = createRouter({
                     component: () => import('@/views/pages/ControleEstoque.vue')
                 },
                 {
+                    path: '/doacoes/entradas',
+                    name: 'ListaEntradas',
+                    component: () => import('@/views/pages/Entradas.vue')
+                },
+                {
+                    path: '/doacoes/saidas',
+                    name: 'ListaSaidas',
+                    component: () => import('@/views/pages/Saidas.vue')
+                },                  
+                {
                     path: '/doacoes/entrada',
                     name: 'EntradaDoacao',
                     component: () => import('@/views/pages/EntradaDoacao.vue')
@@ -62,7 +72,27 @@ const router = createRouter({
                     path: '/doacoes/saida/:id',
                     name: 'EditarSaidaDoacao',
                     component: () => import('@/views/pages/SaidaDoacao.vue')
-                },                  
+                },
+                {
+                    path: '/relatorios/entidades',
+                    name: 'RelatorioEntidades',
+                    component: () => import('@/views/relatorios/RelatorioEntidades.vue')
+                },
+                {
+                    path: '/relatorios/entidade/:id',
+                    name: 'RelatorioEntidade',
+                    component: () => import('@/views/relatorios/RelatorioEntidade.vue')
+                },
+                {
+                    path: '/relatorios/entrada/:id',
+                    name: 'RelatorioEntrada',
+                    component: () => import('@/views/relatorios/RelatorioEntrada.vue')
+                },
+                {
+                    path: '/relatorios/saida/:id',
+                    name: 'RelatorioSaida',
+                    component: () => import('@/views/relatorios/RelatorioSaida.vue')
+                },
                 {
                     path: '/uikit/formlayout',
                     name: 'formlayout',
@@ -168,7 +198,7 @@ const router = createRouter({
         },
 
         {
-            path: '/auth/login',
+            path: '/login',
             name: 'login',
             component: () => import('@/views/pages/auth/Login.vue')
         },

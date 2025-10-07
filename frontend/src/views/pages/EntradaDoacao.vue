@@ -43,9 +43,9 @@ const itensEncontrados = ref([]);
 
 const novaDoacao = ref({
   data_doacao: new Date(),
-  doador: null,           // { id, nome, content_type_id, tipo? }
+  doador: null,
   observacoes: '',
-  itens_doados: [{ item: null, quantidade: 1 }] // item: {id, nome, unidade_medida}
+  itens_doados: [{ item: null, quantidade: 1 }]
 });
 
 // create vs edit
@@ -62,12 +62,18 @@ const totalLinhas = computed(() => novaDoacao.value.itens_doados.length);
 // ---- buscas ----
 const searchDoador = async (event) => {
   try {
-    const resp = await axios.get(`${API_BASE_URL}doador-search/?query=${encodeURIComponent(event.query || '')}`);
-    doadoresEncontrados.value = resp.data;
+    const q = encodeURIComponent(event?.query || '');
+    const resp = await axios.get(`${API_BASE_URL}entidades/?eh_doador=true&search=${q}`);
+    const results = Array.isArray(resp.data?.results) ? resp.data.results : [];
+    doadoresEncontrados.value = results.map(r => ({
+      ...r,
+      nome: r.nome_fantasia || r.razao_social || r.nome_completo || r.nome || 'Sem nome'
+    }));
   } catch {
     doadoresEncontrados.value = [];
   }
 };
+
 
 const searchItem = async (event) => {
   try {
@@ -87,18 +93,29 @@ const removerItem = (index) => {
   novaDoacao.value.itens_doados.splice(index, 1);
 };
 
+const fetchEntidadeById = async (id) => {
+  if (!id) return null;
+  try {
+    const { data } = await axios.get(`${API_BASE_URL}entidades/${id}/`);
+    return { ...data, nome: data.nome_fantasia || data.razao_social || 'Sem nome' };
+  } catch {
+    return null;
+  }
+};
+
 // ---- carregar (prefill/edição) ----
 onMounted(async () => {
   const q = route.query;
 
-  // Prefill (vindo da página de detalhes da entidade/pessoa)
+  // Prefill SÓ se veio algo da rota anterior
   if (!editing.value && (q?.doador_id || q?.doador_nome)) {
     novaDoacao.value.doador = {
       id: q.doador_id ? Number(q.doador_id) : null,
-      nome: q.doador_nome || 'Doador selecionado',
-      content_type_id: q.content_type_id ? Number(q.content_type_id) : null,
-      tipo: q.tipo || undefined
+      nome: q.doador_nome || ''
     };
+  } else {
+    // Acesso direto: mantém vazio para aparecer o placeholder
+    novaDoacao.value.doador = null;
   }
 
   // Edição: carrega a doação existente
@@ -108,26 +125,20 @@ onMounted(async () => {
       const resp = await axios.get(`${API_BASE_URL}doacoes-recebidas/${id}/`);
       const d = resp.data;
 
-      // mapeamento defensivo (ajuste conforme seu serializer)
-      novaDoacao.value = {
-        data_doacao: d.data_doacao ? new Date(d.data_doacao) : new Date(),
-        doador: {
-          id: d.object_id ?? d.doador_id ?? d.doador?.id ?? null,
-          content_type_id: d.content_type ?? d.doador?.content_type_id ?? null,
-          nome: d.doador_nome ?? d.doador?.nome ?? 'Doador'
-        },
-        observacoes: d.observacoes || '',
-        itens_doados: Array.isArray(d.itens_doados)
-          ? d.itens_doados.map(it => ({
-              item: {
-                id: it.item ?? it.item_id,
-                nome: it.item_nome ?? it.nome ?? 'Item',
-                unidade_medida: it.unidade_medida
-              },
-              quantidade: it.quantidade
-            }))
-          : [{ item: null, quantidade: 1 }]
-      };
+      const doadorEntidade = await fetchEntidadeById(d.object_id);
+
+      novaDoacao.value.data_doacao = d.data_doacao ? new Date(d.data_doacao) : new Date();
+      novaDoacao.value.observacoes = d.observacoes || '';
+      novaDoacao.value.doador = doadorEntidade
+        ? doadorEntidade
+        : { id: d.object_id, nome: '' }; // sem rótulo fixo
+
+      novaDoacao.value.itens_doados = Array.isArray(d.itens_doados) && d.itens_doados.length
+        ? d.itens_doados.map(it => ({
+            item: it.item,
+            quantidade: Number(it.quantidade) || 0
+          }))
+        : [{ item: null, quantidade: 1 }];
     } catch (err) {
       console.error('Falha ao carregar doação para edição:', err?.response?.data || err);
       toast.add({ severity: 'error', summary: 'Erro', detail: 'Não foi possível carregar a doação.', life: 5000 });
@@ -148,10 +159,9 @@ const saveDoacao = async () => {
   const payload = {
     data_doacao: d.data_doacao instanceof Date ? d.data_doacao.toISOString().split('T')[0] : d.data_doacao,
     observacoes: d.observacoes || '',
-    content_type: d.doador.content_type ?? d.doador.content_type_id ?? d.doador.ct,
-    object_id: d.doador.id,
+    object_id: d.doador?.id, // o backend já preenche content_type=Entidade se faltar
     itens_doados: d.itens_doados
-      .filter(i => i.item && Number(i.quantidade) > 0)
+      .filter(i => i.item?.id && Number(i.quantidade) > 0)
       .map(i => ({ item_id: i.item.id, quantidade: i.quantidade }))
   };
 
@@ -159,19 +169,18 @@ const saveDoacao = async () => {
     if (editing.value) {
       await axios.put(`${API_BASE_URL}doacoes-recebidas/${route.params.id}/`, payload);
       toast.add({ severity: 'success', summary: 'Sucesso', detail: 'Doação atualizada!', life: 3500 });
-      // opcional: voltar para a tela anterior
-      // router.back();
+      router.push({ name: 'ListaEntradas' });
     } else {
       console.log('payload doacao recebida ->', payload);
       await axios.post(`${API_BASE_URL}doacoes-recebidas/`, payload);
       toast.add({ severity: 'success', summary: 'Sucesso', detail: 'Doação registrada! Estoque atualizado.', life: 4000 });
-      // reset básico mantendo a data de hoje
       novaDoacao.value = {
         data_doacao: new Date(),
         doador: null,
         observacoes: '',
         itens_doados: [{ item: null, quantidade: 1 }]
       };
+      router.push({ name: 'ListaEntradas' });
     }
   } catch (err) {
     const msg = getApiErrorMessage(err);

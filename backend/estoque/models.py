@@ -157,7 +157,12 @@ class DoacaoRealizada(models.Model):
     data_registro = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
-        return f"Saída para {self.beneficiario} em {self.data_saida.strftime('%d/%m/%Y')}"
+        nome = (
+            getattr(self.entidade_gestora, "nome_fantasia", None)
+            or getattr(self.entidade_gestora, "razao_social", None)
+            or "Entidade gestora"
+        )
+        return f"Saída para {nome} em {self.data_saida.strftime('%d/%m/%Y')}"
 
 class ItemSaida(models.Model):
     """ Item avulso que saiu em uma doação. """

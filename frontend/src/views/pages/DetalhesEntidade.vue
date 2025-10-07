@@ -1,6 +1,6 @@
 <script setup>
 import { useAuthStore } from '@/store/auth';
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, watch, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useToast } from 'primevue/usetoast';
 import axios from 'axios';
@@ -43,6 +43,7 @@ const historicoDoacoes = ref([]);
 
 const op = ref();
 const overlayItems = ref([]);
+const toggleError = ref(false);
 
 // --- FUNÇÕES AUXILIARES ---
 const formatDateToAPI = (date) => {
@@ -51,10 +52,62 @@ const formatDateToAPI = (date) => {
     return d.toISOString().split('T')[0]; // Formato AAAA-MM-DD
 }
 
+const contatoStats = computed(() => {
+  const lista = entidadeParaEditar.value?.contatos || [];
+  return {
+    telefones: lista.filter(c => c.tipo_contato === 'T').length,
+    emails:    lista.filter(c => c.tipo_contato === 'E').length,
+  };
+});
+
 const toggleOverlay = (event, items) => {
     overlayItems.value = items;
     op.value.toggle(event);
 };
+
+// === Helpers de máscara/normalização (mesmos do Entidades.vue) ===
+const onlyDigits = (s) => (s || '').replace(/\D/g, '');
+
+const maskDoc = (s) => {
+  const d = onlyDigits(s);
+  if (!d) return '';
+  if (d.length > 11) {
+    return d.replace(
+      /^(\d{0,2})(\d{0,3})(\d{0,3})(\d{0,4})(\d{0,2}).*$/,
+      (_, a,b,c,e,f) => [a, b && '.'+b, c && '.'+c, e && '/'+e, f && '-'+f]
+        .filter(Boolean).join('')
+    );
+  }
+  return d.replace(
+    /^(\d{0,3})(\d{0,3})(\d{0,3})(\d{0,2}).*$/,
+    (_, a,b,c,dig) => [a, b && '.'+b, c && '.'+c, dig && '-'+dig]
+      .filter(Boolean).join('')
+  );
+};
+
+const maskPhone = (s) => {
+  const d = onlyDigits(s).slice(0, 11);
+  if (!d) return '';
+  if (d.length <= 10) {
+    return d.replace(
+      /^(\d{0,2})(\d{0,4})(\d{0,4}).*$/,
+      (_, a,b,c) => [a && `(${a})`, b && ' '+b, c && '-'+c]
+        .filter(Boolean).join('')
+    );
+  }
+  return d.replace(
+    /^(\d{0,2})(\d{0,5})(\d{0,4}).*$/,
+    (_, a,b,c) => [a && `(${a})`, b && ' '+b, c && '-'+c]
+      .filter(Boolean).join('')
+  );
+};
+
+const isValidEmail = (s) => !!s && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s);
+
+// Handlers de input (mantêm o modelo só com dígitos)
+const onDocInput = (e) => { entidadeParaEditar.value.documento = onlyDigits(e.target.value).slice(0, 14); };
+const onPhoneInput = (contato, e) => { contato.valor = onlyDigits(e.target.value).slice(0, 11); };
+
 
 // --- NAVEGAÇÃO: criar entrada/saída com prefill e editar registros ---
 const goToRegistrarEntrada = () => {
@@ -154,6 +207,14 @@ onMounted(() => {
     fetchCategorias();
 });
 
+watch(entidadeParaEditar, (novo) => {
+  if (!novo) return;
+  if (novo.eh_doador && !novo.eh_gestor) {
+    const catDoador = categorias.value.find(c => c.nome?.toLowerCase() === 'doador');
+    if (catDoador) novo.categoria = catDoador.id; // trabalhamos com id
+  }
+}, { deep: true });
+
 watch(() => entidadeParaEditar.value.cep, (novoCep) => {
     // Remove qualquer caractere que não seja número
     const cepLimpo = (novoCep || '').replace(/\D/g, '');
@@ -181,15 +242,22 @@ watch(() => entidadeParaEditar.value.cep, (novoCep) => {
 // --- LÓGICA DO MODAL DE EDIÇÃO ---
 const openEditDialog = () => {
     entidadeParaEditar.value = JSON.parse(JSON.stringify(entidade.value));
-    entidadeParaEditar.value.contatos = entidadeParaEditar.value.contatos || []; // Garante que contatos é um array
+    entidadeParaEditar.value.contatos = entidadeParaEditar.value.contatos || [];
+    entidadeParaEditar.value.eh_doador = !!entidadeParaEditar.value.eh_doador;
+    entidadeParaEditar.value.eh_gestor = !!entidadeParaEditar.value.eh_gestor;
+
+    const cat = entidadeParaEditar.value.categoria;
+    entidadeParaEditar.value.categoria = (cat && typeof cat === 'object') ? cat.id : (cat ?? null);
 
     if (entidadeParaEditar.value.data_cadastro) entidadeParaEditar.value.data_cadastro = new Date(entidadeParaEditar.value.data_cadastro);
     if (entidadeParaEditar.value.vigencia_de) entidadeParaEditar.value.vigencia_de = new Date(entidadeParaEditar.value.vigencia_de);
     if (entidadeParaEditar.value.vigencia_ate) entidadeParaEditar.value.vigencia_ate = new Date(entidadeParaEditar.value.vigencia_ate);
 
     submitted.value = false;
+    toggleError.value = false;
     entidadeDialog.value = true;
 };
+
 
 const hideDialog = () => {
     entidadeDialog.value = false;
@@ -198,6 +266,11 @@ const hideDialog = () => {
 
 const saveEntidade = async () => {
     submitted.value = true;
+    toggleError.value = !(entidadeParaEditar.value.eh_doador || entidadeParaEditar.value.eh_gestor);
+        if (toggleError.value) {
+        toast.add({ severity: 'warn', summary: 'Atenção', detail: 'Selecione Doador e/ou Gestor.', life: 2500 });
+        return;
+    }
     if (!entidadeParaEditar.value.razao_social) return;
 
     // 1. Prepara o payload da Entidade
@@ -205,12 +278,11 @@ const saveEntidade = async () => {
     entidadePayload.data_cadastro = formatDateToAPI(entidadePayload.data_cadastro);
     entidadePayload.vigencia_de = formatDateToAPI(entidadePayload.vigencia_de);
     entidadePayload.vigencia_ate = formatDateToAPI(entidadePayload.vigencia_ate);
+    entidadePayload.categoria = entidadePayload.categoria ?? null;
+    entidadePayload.documento = onlyDigits(entidadePayload.documento);
+    entidadePayload.cep = onlyDigits(entidadePayload.cep);
     
-    if (entidadePayload.categoria && typeof entidadePayload.categoria === 'object') {
-        entidadePayload.categoria_id = entidadePayload.categoria.id;
-    }
-    delete entidadePayload.categoria;
-    delete entidadePayload.contatos; // A API de entidade não lida com contatos diretamente
+    delete entidadePayload.contatos;
 
     try {
         // 2. Salva a Entidade
@@ -220,11 +292,15 @@ const saveEntidade = async () => {
         // 3. Processa e Salva os Contatos
         const contatosPromises = entidadeParaEditar.value.contatos.map(contato => {
             const contatoPayload = { ...contato, entidade: savedEntidade.id };
-            if (contato.id) {
-                return axios.put(`${API_BASE_URL}contatos/${contato.id}/`, contatoPayload);
-            } else {
-                return axios.post(`${API_BASE_URL}contatos/`, contatoPayload);
+            if (contatoPayload.tipo_contato === 'T') {
+                contatoPayload.valor = onlyDigits(contatoPayload.valor);
             }
+            if (contatoPayload.tipo_contato === 'E' && contatoPayload.valor && !isValidEmail(contatoPayload.valor)) {
+                return Promise.reject({ message: 'E-mail inválido em contatos.' });
+            }
+            return contato.id
+                ? axios.put(`${API_BASE_URL}contatos/${contato.id}/`, contatoPayload)
+                : axios.post(`${API_BASE_URL}contatos/`, contatoPayload);
         });
         
         await Promise.all(contatosPromises);
@@ -444,6 +520,11 @@ const saveBeneficiado = async () => {
         toast.add({ severity: 'error', summary: 'Erro', detail: 'Não foi possível salvar.', life: 3000 });
     }
 };
+
+const abrirEmNovaAba = (name, params) => {
+  const { href } = router.resolve({ name, params });
+  window.open(href, '_blank');
+};
 </script>
 
 <template>
@@ -457,19 +538,30 @@ const saveBeneficiado = async () => {
                     <div>
                         <h3 class="m-0">{{ entidade.nome_fantasia }}</h3>
                         <div>
-                           <Tag v-if="entidade.eh_doador" value="Doador" severity="success" class="mr-2"></Tag>
-                           <Tag v-if="entidade.eh_gestor" value="Gestor" severity="info" class="mr-2"></Tag>
-                           <Tag v-if="entidade.eh_gestor" severity="info">{{ entidade.categoria?.nome || 'Não definida' }}</Tag>
+                            <Tag v-if="entidade.eh_doador" value="Doador" severity="success" class="mr-2"></Tag>
+                            <Tag v-if="entidade.eh_gestor" value="Gestor" severity="info" class="mr-2"></Tag>
+                            <Tag v-if="entidade.eh_gestor" severity="info">
+                                {{ entidade.categoria?.nome || (categorias.find(c => c.id === entidade.categoria)?.nome) || 'Não definida' }}
+                            </Tag>
                         </div>
                     </div>
                 </div>
-                <Button icon="pi pi-pencil" label="Editar Dados Gerais" class="p-button-text" @click="openEditDialog" />
+                <div>
+                    <Button icon="pi pi-pencil" label="Editar Dados Gerais" class="p-button-text mr-3" @click="openEditDialog" />
+                    <Button
+                        label="Relatório da entidade"
+                        icon="pi pi-print"
+                        class="p-button-help"
+                        :disabled="!entidade?.id"
+                        @click="abrirEmNovaAba('RelatorioEntidade', { id: entidade?.id })"
+                    />
+                </div>
             </div>
             <Divider />
             <div class="flex flex-col gap-4">
                 <div class="grid grid-cols-12 gap-4">
                     <div class="flex items-center gap-2 col-span-8"><strong>Razão Social:</strong> {{ entidade.razao_social }}</div>
-                    <div class="flex items-center gap-2 col-span-4"><strong>CNPJ:</strong> {{ entidade.cnpj }}</div>
+                    <div class="flex items-center gap-2 col-span-4"><strong>Documento:</strong> {{ maskDoc(entidade.documento) }}</div>
                 </div>
                 <div><strong>Endereço:</strong> {{ entidade.logradouro }}, {{ entidade.numero }} - {{ entidade.bairro }}</div>
                 <div><strong>Observações:</strong> {{ entidade.observacoes }}</div>
@@ -499,11 +591,11 @@ const saveBeneficiado = async () => {
             <TabView class="mt-5">
                 <TabPanel header="Histórico de Doações" v-if="entidade.eh_gestor">
                     <div class="flex items-center justify-between mb-3">
-                        <h5 class="m-0">Histórico de Doações Recebidas (Entradas)</h5>
+                        <h5 class="m-0">Histórico de Doações (Entregas)</h5>
                         <Button
-                            label="Registrar Entrada"
-                            icon="pi pi-arrow-down"
-                            @click="goToRegistrarEntrada"
+                            label="Registrar Entrega"
+                            icon="pi pi-arrow-up"
+                            @click="goToRegistrarSaida"
                         />
                     </div>
                     <Timeline :value="historicoAtendimentos" align="alternate" class="customized-timeline">
@@ -536,9 +628,17 @@ const saveBeneficiado = async () => {
                 </TabPanel>
 
                 <TabPanel header="Histórico de Doações" v-if="entidade.eh_doador">
+                    <div class="flex items-center justify-between mb-3">
+                        <h5 class="m-0">Histórico de Doações Recebidas (Entradas)</h5>
+                        <Button
+                            label="Registrar Entrada"
+                            icon="pi pi-arrow-down"
+                            @click="goToRegistrarEntrada"
+                        />
+                    </div>
                     <Timeline :value="historicoDoacoes" align="alternate" class="customized-timeline">
                         <template #marker="slotProps">
-                            <span class="custom-marker shadow-2" style="background-color: var(--green-500)">
+                            <span class="custom-marker shadow-2">
                                 <i class="pi pi-box"></i>
                             </span>
                         </template>
@@ -614,15 +714,35 @@ const saveBeneficiado = async () => {
         <Dialog v-model:visible="entidadeDialog" :style="{ width: '50rem' }" header="Detalhes da Entidade" :modal="true">
             <div class="flex flex-col gap-6">
                 <div class="grid grid-cols-12 gap-4">
+                    <div class="flex items-center col-span-6">
+                        <InputSwitch v-model="entidadeParaEditar.eh_gestor" inputId="gestor-switch" />
+                        <label for="gestor-switch" class="font-bold ml-3"> Marcar como Gestor/Recebedor</label>
+                    </div>
+                    <div class="flex items-center col-span-6">
+                        <InputSwitch v-model="entidadeParaEditar.eh_doador" inputId="doador-switch" />
+                        <label for="doador-switch" class="font-bold ml-3"> Marcar como Doador</label>
+                    </div>
+                </div>
+                <small class="p-error" v-if="submitted && toggleError">Selecione pelo menos uma opção (Gestor/Recebedor ou Doador).</small>
+                <Divider class="my-2" />
+                <div class="grid grid-cols-12 gap-4">
                     <div class="col-span-8">
                         <label for="razao_social" class="block font-bold mb-3">Razão Social</label>
                         <InputText id="razao_social" v-model.trim="entidadeParaEditar.razao_social" required="true" autofocus :class="{'p-invalid': submitted && !entidadeParaEditar.razao_social}" fluid />
                         <small class="p-error" v-if="submitted && !entidadeParaEditar.razao_social">Razão Social é obrigatório.</small>
                     </div>
                     <div class="col-span-4">
-                        <label for="cnpj" class="block font-bold mb-3">CNPJ</label>
-                        <InputText id="cnpj" v-model.trim="entidadeParaEditar.cnpj" required="true" :class="{'p-invalid': submitted && !entidadeParaEditar.cnpj}" fluid />
-                        <small class="p-error" v-if="submitted && !entidadeParaEditar.cnpj">CNPJ é obrigatório.</small>
+                        <label for="documento" class="block font-bold mb-3">CNPJ ou CPF</label>
+                        <InputText
+                          id="documento"
+                          :value="maskDoc(entidadeParaEditar.documento)"
+                          @input="onDocInput"
+                          inputmode="numeric"
+                          required
+                          :class="{'p-invalid': submitted && !entidadeParaEditar.documento}"
+                          fluid
+                        />
+                        <small class="p-error" v-if="submitted && !entidadeParaEditar.documento">Documento é obrigatório.</small>
                     </div>
                 </div>
                 <div class="grid grid-cols-12 gap-4">
@@ -632,7 +752,15 @@ const saveBeneficiado = async () => {
                     </div>
                     <div class="col-span-4">
                         <label for="categoria" class="block font-bold mb-3">Categoria</label>
-                        <Dropdown id="categoria" v-model="entidadeParaEditar.categoria" :options="categorias" optionLabel="nome" placeholder="Selecione" fluid></Dropdown>
+                        <Dropdown
+                            id="categoria"
+                            v-model="entidadeParaEditar.categoria"
+                            :options="categorias"
+                            optionLabel="nome"
+                            optionValue="id"
+                            placeholder="Selecione"
+                            fluid
+                        />
                     </div>
                 </div>
                 <div class="grid grid-cols-12 gap-4">
@@ -652,6 +780,9 @@ const saveBeneficiado = async () => {
                 <Divider class="m-0" align="left" type="solid">
                     <b>Contatos</b>
                 </Divider>
+                <div class="mb-2 text-sm text-gray-600">
+                    {{ contatoStats.telefones }} telefone(s) · {{ contatoStats.emails }} e-mail(s)
+                </div>
                 <div v-for="(contato, index) in entidadeParaEditar.contatos" :key="index">
                     <div class="grid grid-cols-12 gap-4">
                         <div class="col-span-2">
@@ -660,11 +791,28 @@ const saveBeneficiado = async () => {
                         </div>
                         <div class="col-span-5">
                             <label for="contato-valor" class="block font-bold mb-3">Contato</label>
-                            <InputText id="contato-valor" :value="contato.valor" fluid />
+                            <template v-if="contato.tipo_contato === 'T'">
+                                <InputText
+                                    :value="maskPhone(contato.valor)"
+                                    @input="(e) => onPhoneInput(contato, e)"
+                                    inputmode="tel"
+                                    fluid
+                                />
+                                </template>
+                                <template v-else>
+                                <InputText
+                                    v-model.trim="contato.valor"
+                                    type="email"
+                                    :class="{'p-invalid': contato.valor && !isValidEmail(contato.valor)}"
+                                    placeholder="email@exemplo.com"
+                                    fluid
+                                />
+                            <small class="p-error" v-if="contato.valor && !isValidEmail(contato.valor)">E-mail inválido.</small>
+                            </template>
                         </div>
                         <div class="col-span-4">
                             <label for="contato-desc" class="block font-bold mb-3">Contato</label>
-                            <InputText id="contato-desc" :value="contato.descricao" placeholder="Ex: Celular, Whatsapp" fluid />
+                            <InputText v-model.trim="contato.descricao" placeholder="Ex: Celular, Whatsapp" fluid />
                         </div>
                         <div class="col-span-1">
                             <label class="block font-bold mb-3">&nbsp;</label>
@@ -672,12 +820,14 @@ const saveBeneficiado = async () => {
                         </div>
                     </div>
                 </div>
-                <Button label="Adicionar Telefone" icon="pi pi-phone" class="p-button-outlined mr-2" @click="addContato('T')" />
-                <Button label="Adicionar Email" icon="pi pi-envelope" class="p-button-outlined" @click="addContato('E')" />
+                <div class="grid grid-cols-2 gap-4">
+                    <Button label="Adicionar Telefone" icon="pi pi-phone" class="p-button-outlined mr-2" @click="addContato('T')" />
+                    <Button label="Adicionar Email" icon="pi pi-envelope" class="p-button-outlined" @click="addContato('E')" />
+                </div>
                 <div class="grid grid-cols-12 gap-4">
                     <div class="col-span-3">
                         <label for="cep" class="block font-bold mb-3">CEP</label>
-                        <InputMask id="cep" v-model="entidadeParaEditar.cep" mask="99999-999" fluid />
+                        <InputMask id="cep" v-model="entidadeParaEditar.cep" mask="99999-999" :unmask="true" fluid />
                     </div>
                     <div class="col-span-9">
                         <label for="logradouro" class="block font-bold mb-3">Logradouro (Rua, Av.)</label>

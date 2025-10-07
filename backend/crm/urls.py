@@ -5,7 +5,7 @@ from .views import (
     EntidadeViewSet, CategoriaEntidadeViewSet, PessoaFisicaViewSet, 
     ResponsavelViewSet, BeneficiarioViewSet, ContatoViewSet,
     AniversariantesDoDiaView, AgendaContatosView, DoadorSearchView,
-    DashboardView, CurrentUserView
+    DashboardView, CurrentUserView, AlertaViewSet
 )
 
 # Cria um router e registra nosso viewset com ele.
@@ -16,6 +16,7 @@ router.register(r'pessoas', PessoaFisicaViewSet, basename='pessoa')
 router.register(r'responsaveis', ResponsavelViewSet, basename='responsavel')
 router.register(r'beneficiarios', BeneficiarioViewSet, basename='beneficiario')
 router.register(r'contatos', ContatoViewSet, basename='contato')
+router.register(r'alertas', AlertaViewSet, basename='alerta')
 
 # As URLs da API são determinadas automaticamente pelo router.
 urlpatterns = [

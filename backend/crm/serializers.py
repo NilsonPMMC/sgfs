@@ -2,7 +2,7 @@
 from django.contrib.auth.models import User, Permission
 from django.contrib.contenttypes.models import ContentType
 from rest_framework import serializers
-from .models import Entidade, Contato, CategoriaEntidade, PessoaFisica, Responsavel, Beneficiario
+from .models import Entidade, Contato, CategoriaEntidade, PessoaFisica, Responsavel, Beneficiario, Alerta
 
 class ContatoWriteSerializer(serializers.ModelSerializer):
     class Meta:
@@ -80,7 +80,7 @@ class EntidadeSerializer(serializers.ModelSerializer):
             'id', 
             'razao_social', 
             'nome_fantasia', 
-            'cnpj', 
+            'documento', 
             'logradouro',
             'numero',
             'bairro',
@@ -107,3 +107,16 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_permissions(self, obj):
         return obj.get_all_permissions()
+
+class AlertaSerializer(serializers.ModelSerializer):
+    entidade_nome = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Alerta
+        fields = ['id', 'titulo', 'mensagem', 'severity', 'criado_em', 'lido', 'entidade', 'entidade_nome']
+
+    def get_entidade_nome(self, obj):
+        e = obj.entidade
+        if not e:
+            return None
+        return getattr(e, 'nome_fantasia', None) or getattr(e, 'razao_social', None) or str(e.id)

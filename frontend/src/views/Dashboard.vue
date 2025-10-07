@@ -8,7 +8,10 @@ const authStore = useAuthStore();
 const { isDarkTheme } = useLayout();
 const loading = ref(true);
 const dashboardData = ref(null);
+const alertas = ref([]);
+const alertasLoading = ref(true);
 const API_URL = 'http://127.0.0.1:8005/api/dashboard/';
+const API_ALERTAS = 'http://127.0.0.1:8005/api/alertas/';
 
 // Estado para os dados dos gráficos
 const estoquePieData = ref(null);
@@ -115,6 +118,20 @@ const setChartData = (data) => {
     };
 };
 
+const fetchAlertasDashboard = async () => {
+  alertasLoading.value = true;
+  try {
+    const r = await axios.get(API_ALERTAS);
+    const lista = Array.isArray(r.data?.results) ? r.data.results : (Array.isArray(r.data) ? r.data : []);
+    alertas.value = lista.filter(a => !a.lido).slice(0, 5); // mostra até 5
+  } catch (e) {
+    console.error('Erro ao buscar alertas:', e);
+    alertas.value = [];
+  } finally {
+    alertasLoading.value = false;
+  }
+};
+
 onMounted(() => {
     axios.get(API_URL)
         .then(response => {
@@ -123,7 +140,20 @@ onMounted(() => {
         })
         .catch(error => console.error("Erro ao buscar dados do dashboard:", error))
         .finally(() => loading.value = false);
+
+    // carrega alertas em paralelo
+    fetchAlertasDashboard();
 });
+
+const formatarDataBR = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const dd = String(d.getDate()).padStart(2,'0');
+    const mm = String(d.getMonth()+1).padStart(2,'0');
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+};
+
 
 watch(isDarkTheme, () => {
     if (dashboardData.value) {
@@ -137,7 +167,7 @@ watch(isDarkTheme, () => {
         <ProgressSpinner />
     </div>
     <div v-else-if="dashboardData" class="grid grid-cols-12 gap-8">
-        <div class="col-span-12 xl:col-span-12">
+        <div class="col-span-12 xl:col-span-6">
             <div class="card mb-0">
                 <div class="flex justify-between mb-4">
                     <div>
@@ -161,6 +191,39 @@ watch(isDarkTheme, () => {
                 <div v-else>
                     <p class="text-500">Nenhum aniversariante na semana.</p>
                 </div>
+            </div>
+        </div>
+        <div class="col-span-12 xl:col-span-6">
+            <div class="card mb-0">
+            <div class="flex justify-between mb-4">
+                <div>
+                <span class="block text-muted-color font-medium mb-4">Notificações</span>
+                <div class="text-surface-900 dark:text-surface-0 font-medium text-xl">
+                    {{ alertas.length }} pendente(s)
+                </div>
+                </div>
+                <div class="flex items-center justify-center bg-orange-100 dark:bg-orange-400/10 rounded-border" style="width: 2.5rem; height: 2.5rem">
+                <i class="pi pi-bell text-orange-500 !text-xl"></i>
+                </div>
+            </div>
+
+            <div v-if="alertasLoading">
+                <p>Carregando...</p>
+            </div>
+            <ul v-else-if="alertas.length" class="p-0 mx-0 mt-0 mb-6 list-none">
+                <li v-for="a in alertas" :key="a.id" class="flex items-start py-3 border-b border-surface">
+                <div class="w-10 h-10 flex items-center justify-center bg-orange-100 dark:bg-orange-400/10 rounded-full mr-4 shrink-0">
+                    <i class="pi pi-exclamation-triangle text-orange-500"></i>
+                </div>
+                <div class="flex-1">
+                    <div class="font-semibold">{{ a.mensagem }}</div>
+                    <small class="text-500">Criado em: {{ formatarDataBR(a.criado_em) }}</small>
+                </div>
+                </li>
+            </ul>
+            <div v-else>
+                <p class="text-500">Nenhuma notificação pendente.</p>
+            </div>
             </div>
         </div>
         <div class="col-span-12 xl:col-span-6">

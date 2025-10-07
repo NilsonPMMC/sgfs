@@ -1,5 +1,6 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 import { useToast } from 'primevue/usetoast';
 
@@ -15,6 +16,9 @@ import Tag from 'primevue/tag';
 import Toast from 'primevue/toast';
 
 const toast = useToast();
+const route = useRoute();
+const router = useRouter();
+const editing = computed(() => Boolean(route.params.id));
 
 // Base da API
 const API_BASE_URL = 'http://127.0.0.1:8005/api/';
@@ -25,6 +29,82 @@ const salvando = ref(false);
 const entidadesGestorasEncontradas = ref([]);
 const itensEncontrados = ref([]);
 const kitsEncontrados = ref([]);
+
+const displayEntidade = (e) =>
+  e?.nome_fantasia || e?.razao_social || e?.nome || '';
+
+const fetchEntidadeById = async (id) => {
+  if (!id) return null;
+  try {
+    const { data } = await axios.get(`${API_BASE_URL}entidades/${id}/`);
+    // normaliza para funcionar no AutoComplete (optionLabel nome_fantasia)
+    return {
+      ...data,
+      nome_fantasia: data.nome_fantasia || data.razao_social || data.nome || 'Sem nome'
+    };
+  } catch {
+    return null;
+  }
+};
+
+const loadSaida = async (id) => {
+  // GET da doação realizada
+  const { data } = await axios.get(`${API_BASE_URL}doacoes-realizadas/${id}/`);
+
+  // entidade_gestora no serializer é ID; precisamos do objeto para o AutoComplete
+  const entidadeObj = await fetchEntidadeById(data.entidade_gestora);
+
+  // itens/kits vêm aninhados no serializer de leitura
+  const itens = Array.isArray(data.itens_saida)
+    ? data.itens_saida.map(i => ({
+        item: i.item,                // já é {id, nome, unidade_medida, ...}
+        quantidade: i.quantidade
+      }))
+    : [];
+
+  const kits = Array.isArray(data.kits_saida)
+    ? data.kits_saida.map(k => ({
+        kit: k.kit,                  // já é {id, nome, itens_do_kit, ...}
+        quantidade: k.quantidade
+      }))
+    : [];
+
+  novaSaida.value = {
+    data_saida: data.data_saida ? new Date(data.data_saida) : new Date(),
+    entidade_gestora: entidadeObj,  // objeto compatível com o AutoComplete
+    itens_saida: itens,
+    kits_saida: kits,
+    observacoes: data.observacoes || ''
+  };
+};
+
+onMounted(async () => {
+  // Prefill quando vindo de DetalhesEntidade (querystring)
+  const q = route.query;
+  if (!editing.value && (q?.entidade_id || q?.entidade_nome)) {
+    const entidadeObj = q?.entidade_id
+      ? await fetchEntidadeById(Number(q.entidade_id))
+      : { id: null, nome_fantasia: q.entidade_nome || '' };
+    novaSaida.value.entidade_gestora = entidadeObj;
+  }
+
+  // Edição
+  if (editing.value) {
+    try {
+      await loadSaida(route.params.id);
+    } catch (err) {
+      console.error('Falha ao carregar saída:', err?.response?.data || err);
+      toast.add({
+        severity: 'error',
+        summary: 'Erro',
+        detail: 'Não foi possível carregar a doação de saída para edição.',
+        life: 5000
+      });
+    }
+  }
+});
+
+const voltar = () => router.back();
 
 const novaSaida = ref({
   data_saida: new Date(),
@@ -73,10 +153,11 @@ const getKitClass = (option) => {
 // ---- BUSCAS ----
 const searchEntidadeGestora = async (event) => {
   try {
-    const q = encodeURIComponent(event?.query || '');
+    const q = event?.query || '';
     const resp = await axios.get(`${API_BASE_URL}entidades/?eh_gestor=true&search=${q}`);
-    // Pode vir paginado (results) ou plano (array)
-    entidadesGestorasEncontradas.value = Array.isArray(resp.data?.results) ? resp.data.results : (Array.isArray(resp.data) ? resp.data : []);
+    entidadesGestorasEncontradas.value = Array.isArray(resp.data?.results)
+      ? resp.data.results
+      : (Array.isArray(resp.data) ? resp.data : []);
   } catch {
     entidadesGestorasEncontradas.value = [];
   }
@@ -154,27 +235,31 @@ const saveSaida = async () => {
   };
 
   try {
-    await axios.post(`${API_BASE_URL}doacoes-realizadas/`, payload);
-    toast.add({ severity: 'success', summary: 'Sucesso', detail: 'Saída registrada! Estoque atualizado.', life: 4000 });
-
-    // reset mantendo a data
-    novaSaida.value = {
-      data_saida: new Date(),
-      entidade_gestora: null,
-      itens_saida: [],
-      kits_saida: [],
-      observacoes: ''
-    };
+    if (editing.value) {
+      await axios.put(`${API_BASE_URL}doacoes-realizadas/${route.params.id}/`, payload);
+      toast.add({ severity: 'success', summary: 'Sucesso', detail: 'Saída atualizada!', life: 3500 });
+      router.push({ name: 'ListaSaidas' });
+    } else {
+      await axios.post(`${API_BASE_URL}doacoes-realizadas/`, payload);
+      toast.add({ severity: 'success', summary: 'Sucesso', detail: 'Saída registrada! Estoque atualizado.', life: 4000 });
+      novaSaida.value = {
+        data_saida: new Date(),
+        entidade_gestora: null,
+        itens_saida: [],
+        kits_saida: [],
+        observacoes: ''
+      };
+      router.push({ name: 'ListaSaidas' });
+    }
   } catch (err) {
     const msg = getApiErrorMessage(err);
-    console.error('Erro ao registrar saída:', err?.response?.data || err);
+    console.error('Erro ao salvar saída:', err?.response?.data || err);
     toast.add({ severity: 'error', summary: 'Erro', detail: msg, life: 6000 });
   } finally {
     salvando.value = false;
   }
 };
 </script>
-
 
 <template>
   <div>
@@ -194,20 +279,30 @@ const saveSaida = async () => {
             <div class="col-span-12 md:col-span-8">
             <label class="block font-semibold mb-2">Entidade Gestora</label>
             <AutoComplete
-                v-model="novaSaida.entidade_gestora"
-                :suggestions="entidadesGestorasEncontradas"
-                @complete="searchEntidadeGestora"
-                optionLabel="nome_fantasia"
-                dropdown
-                fluid
-                placeholder="Buscar entidade..."
+              v-model="novaSaida.entidade_gestora"
+              :suggestions="entidadesGestorasEncontradas"
+              @complete="searchEntidadeGestora"
+              optionLabel="nome_fantasia"
+              dropdown
+              fluid
+              placeholder="Buscar entidade..."
             >
-                <template #option="slotProps">
+              <template #option="{ option }">
                 <div class="flex items-center justify-between w-full">
-                    <span>{{ slotProps.option.nome_fantasia }}</span>
+                  <span>{{ option?.nome_fantasia || option?.razao_social || option?.nome }}</span>
                 </div>
-                </template>
+              </template>
+              <template #chip="{ value }">
+                {{ displayEntidade(value) }}
+              </template>
+              <template #content>
+                <!-- exibe o selecionado no input quando não está em modo múltiplo -->
+                {{ displayEntidade(novaSaida.entidade_gestora) }}
+              </template>
             </AutoComplete>
+            <small class="text-gray-500 italic">
+              Mostrando apenas entidades gestoras (recebedoras de doações)
+            </small>
             </div>
 
             <div class="col-span-12 md:col-span-4">
@@ -324,7 +419,7 @@ const saveSaida = async () => {
         
         <div class="flex justify-end gap-2">
             <Button
-            label="Registrar Saída"
+            label="Salvar Doação"
             icon="pi pi-check"
             :loading="salvando"
             :disabled="!podeSalvar"

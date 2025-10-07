@@ -169,8 +169,8 @@ const exportCSV = () => {
                         <span v-if="slotProps.data.cargo">{{ slotProps.data.cargo }}</span>
                     </template>
                 </Column>
-                <Column header="Ações" style="width: 12rem; text-align: center;">
-                        <template #body="slotProps">
+                <Column header="Ações" style="width: 12rem">
+                    <template #body="slotProps">
                         <Button icon="pi pi-pencil" outlined rounded class="mr-2" @click="editPessoa(slotProps.data)" />
                         <Button icon="pi pi-trash" outlined rounded severity="danger" @click="confirmDeletePessoa(slotProps.data)" />
                     </template>

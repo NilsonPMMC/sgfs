@@ -1,25 +1,182 @@
 # crm/admin.py
 from django.contrib import admin
-from .models import CategoriaEntidade, Entidade, Contato, PessoaFisica, Responsavel, Beneficiario
+from django.http import HttpResponse
+from django.db.models import Q
+from .models import (
+    CategoriaEntidade, Entidade, Contato,
+    PessoaFisica, Responsavel, Beneficiario
+)
+import csv
 
-# Customização para exibir contatos diretamente na página da Entidade
+# =========================
+# AÇÕES COMUNS (CSV, toggles)
+# =========================
+
+def export_as_csv_action(description="Exportar selecionados para CSV"):
+    def action(modeladmin, request, queryset):
+        meta = modeladmin.model._meta
+        fields = [f.name for f in meta.fields]
+        resp = HttpResponse(content_type="text/csv; charset=utf-8")
+        resp["Content-Disposition"] = f'attachment; filename="{meta.model_name}.csv"'
+        writer = csv.writer(resp)
+        writer.writerow(fields)
+        for obj in queryset:
+            writer.writerow([getattr(obj, f, "") for f in fields])
+        return resp
+    action.short_description = description
+    return action
+
+@admin.action(description="Marcar selecionados como DOADOR")
+def marcar_como_doador(modeladmin, request, queryset):
+    queryset.update(eh_doador=True)
+
+@admin.action(description="Marcar selecionados como NÃO DOADOR")
+def desmarcar_como_doador(modeladmin, request, queryset):
+    queryset.update(eh_doador=False)
+
+@admin.action(description="Marcar selecionados como GESTOR/RECEBEDOR")
+def marcar_como_gestor(modeladmin, request, queryset):
+    queryset.update(eh_gestor=True)
+
+@admin.action(description="Marcar selecionados como NÃO GESTOR/RECEBEDOR")
+def desmarcar_como_gestor(modeladmin, request, queryset):
+    queryset.update(eh_gestor=False)
+
+@admin.action(description="Ativar beneficiários selecionados")
+def ativar_beneficiarios(modeladmin, request, queryset):
+    queryset.update(ativo=True)
+
+@admin.action(description="Desativar beneficiários selecionados")
+def desativar_beneficiarios(modeladmin, request, queryset):
+    queryset.update(ativo=False)
+
+
+# =========================
+# INLINES
+# =========================
+
 class ContatoInline(admin.TabularInline):
     model = Contato
-    extra = 1 # Quantos campos de contato em branco exibir
+    extra = 1
+    autocomplete_fields = ["entidade"]  # ajuda se trocar entidade aqui
+    fields = ("tipo_contato", "valor", "descricao")
+
+
+class ResponsavelInline(admin.TabularInline):
+    model = Responsavel
+    extra = 0
+    autocomplete_fields = ["pessoa_fisica"]
+    fields = ("pessoa_fisica", "cargo")
+
+
+class BeneficiarioInline(admin.TabularInline):
+    model = Beneficiario
+    extra = 0
+    # entidade_intermediaria é a própria Entidade na tela pai
+    autocomplete_fields = ["pessoa_fisica"]
+    fields = ("pessoa_fisica", "data_vinculo", "ativo")
+    readonly_fields = ("data_vinculo",)
+
+
+# =========================
+# ADMINS
+# =========================
+
+@admin.register(CategoriaEntidade)
+class CategoriaEntidadeAdmin(admin.ModelAdmin):
+    list_display = ("nome",)
+    search_fields = ("nome",)
+    actions = [export_as_csv_action()]
+
 
 @admin.register(Entidade)
 class EntidadeAdmin(admin.ModelAdmin):
-    list_display = ('nome_fantasia', 'razao_social', 'cnpj', 'categoria', 'eh_doador', 'eh_gestor')
-    search_fields = ('nome_fantasia', 'razao_social', 'cnpj')
-    list_filter = ('categoria', 'eh_doador', 'eh_gestor')
-    inlines = [ContatoInline] # Adiciona os contatos na mesma tela
+    list_display = (
+        "nome_fantasia", "razao_social", "documento",
+        "categoria", "eh_doador", "eh_gestor",
+        "vigencia_de", "vigencia_ate",
+    )
+    search_fields = (
+        "nome_fantasia", "razao_social", "documento",
+        "bairro", "logradouro", "cep",
+    )
+    list_filter = (
+        "categoria", "eh_doador", "eh_gestor",
+        ("vigencia_de", admin.DateFieldListFilter),
+        ("vigencia_ate", admin.DateFieldListFilter),
+    )
+    inlines = [ContatoInline, ResponsavelInline, BeneficiarioInline]
+    actions = [
+        export_as_csv_action(),
+        marcar_como_doador, desmarcar_como_doador,
+        marcar_como_gestor, desmarcar_como_gestor,
+    ]
+    list_select_related = ("categoria",)
+    fieldsets = (
+        ("Identificação", {
+            "fields": ("razao_social", "nome_fantasia", "documento", "categoria")
+        }),
+        ("Endereço", {
+            "classes": ("collapse",),
+            "fields": ("logradouro", "numero", "bairro", "cep"),
+        }),
+        ("Vigência/Observações", {
+            "classes": ("collapse",),
+            "fields": ("data_cadastro", "vigencia_de", "vigencia_ate", "observacoes"),
+        }),
+        ("Perfis", {
+            "fields": ("eh_doador", "eh_gestor"),
+        }),
+    )
+
+
+@admin.register(Contato)
+class ContatoAdmin(admin.ModelAdmin):
+    list_display = ("entidade", "tipo_contato", "valor", "descricao")
+    list_filter = ("tipo_contato",)
+    search_fields = ("valor", "descricao", "entidade__nome_fantasia", "entidade__razao_social", "entidade__documento")
+    autocomplete_fields = ["entidade"]
+    actions = [export_as_csv_action()]
+    list_select_related = ("entidade",)
+
 
 @admin.register(PessoaFisica)
 class PessoaFisicaAdmin(admin.ModelAdmin):
-    list_display = ('nome_completo', 'cpf', 'telefone', 'email')
-    search_fields = ('nome_completo', 'cpf')
+    list_display = ("nome_completo", "cpf", "telefone", "email", "data_nascimento")
+    search_fields = ("nome_completo", "cpf", "email", "telefone")
+    list_filter = (("data_nascimento", admin.DateFieldListFilter),)
+    actions = [export_as_csv_action()]
 
-# Registra os outros modelos de forma simples
-admin.site.register(CategoriaEntidade)
-admin.site.register(Responsavel)
-admin.site.register(Beneficiario)
+
+@admin.register(Responsavel)
+class ResponsavelAdmin(admin.ModelAdmin):
+    list_display = ("pessoa_fisica", "cargo", "entidade")
+    search_fields = (
+        "cargo",
+        "pessoa_fisica__nome_completo", "pessoa_fisica__cpf",
+        "entidade__nome_fantasia", "entidade__razao_social", "entidade__documento",
+    )
+    autocomplete_fields = ["pessoa_fisica", "entidade"]
+    list_select_related = ("pessoa_fisica", "entidade")
+    actions = [export_as_csv_action()]
+
+
+@admin.register(Beneficiario)
+class BeneficiarioAdmin(admin.ModelAdmin):
+    list_display = ("pessoa_fisica", "entidade_intermediaria", "data_vinculo", "ativo")
+    search_fields = (
+        "pessoa_fisica__nome_completo", "pessoa_fisica__cpf",
+        "entidade_intermediaria__nome_fantasia",
+        "entidade_intermediaria__razao_social",
+        "entidade_intermediaria__documento",
+    )
+    list_filter = (("data_vinculo", admin.DateFieldListFilter), "ativo")
+    autocomplete_fields = ["pessoa_fisica", "entidade_intermediaria"]
+    list_select_related = ("pessoa_fisica", "entidade_intermediaria")
+    actions = [export_as_csv_action(), ativar_beneficiarios, desativar_beneficiarios]
+
+
+# Branding
+admin.site.site_header = "SGFS — Administração"
+admin.site.site_title  = "SGFS Admin"
+admin.site.index_title = "Gestão Administrativa (CRM)"

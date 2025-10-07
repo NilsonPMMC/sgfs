@@ -20,6 +20,14 @@ const model = ref([
                             { label: 'Itens', icon: 'pi pi-fw pi-barcode', to: '/itens' },
                             { label: 'Kits', icon: 'pi pi-fw pi-box', to: '/kits' }
                         ]
+            },
+            {
+                label: 'Doações',
+                icon: 'pi pi-fw pi-box',
+                items: [
+                            { label: 'Entradas', icon: 'pi pi-fw pi-arrow-down', to: '/doacoes/entradas' },
+                            { label: 'Saídas', icon: 'pi pi-fw pi-arrow-up', to: '/doacoes/saidas' }
+                        ]
             }
         ]
     }

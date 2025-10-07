@@ -1,18 +1,21 @@
 # crm/views.py
+from django_filters.rest_framework import DjangoFilterBackend, FilterSet, BooleanFilter, NumberFilter
 from django.contrib.contenttypes.models import ContentType
 from django.db.models.functions import Coalesce, TruncMonth
-from django.db.models import Sum, F, IntegerField, DecimalField, Count, Q
+from django.db.models import Sum, F, IntegerField, DecimalField, Count, Q, Max
+from django.utils import timezone
 from datetime import date, timedelta
 from rest_framework.permissions import IsAuthenticated
-from rest_framework import viewsets
+from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.decorators import action 
-from .models import Entidade, CategoriaEntidade, PessoaFisica, Responsavel, Beneficiario, Contato
+from rest_framework.decorators import action
+from rest_framework.filters import SearchFilter, OrderingFilter
+from .models import Entidade, CategoriaEntidade, PessoaFisica, Responsavel, Beneficiario, Contato, Alerta
 from .serializers import (
     EntidadeSerializer, CategoriaEntidadeSerializer, PessoaFisicaSerializer,
     ResponsavelSerializer, BeneficiarioSerializer, ResponsavelWriteSerializer, BeneficiarioWriteSerializer,
-    ContatoSerializer, ContatoWriteSerializer, UserSerializer
+    ContatoSerializer, ContatoWriteSerializer, UserSerializer, AlertaSerializer
 )
 from estoque.models import Item, DoacaoRealizada, DoacaoRecebida
 from estoque.serializers import DoacaoRealizadaSerializer, DoacaoRecebidaSerializer
@@ -32,6 +35,17 @@ class CategoriaEntidadeViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = CategoriaEntidade.objects.all().order_by('nome')
     serializer_class = CategoriaEntidadeSerializer
 
+class EntidadeFilter(FilterSet):
+    permission_classes = [IsAuthenticated]
+    
+    eh_gestor = BooleanFilter(field_name="eh_gestor")
+    eh_doador = BooleanFilter(field_name="eh_doador")
+    categoria = NumberFilter(field_name="categoria_id")
+
+    class Meta:
+        model = Entidade
+        fields = ["eh_gestor", "eh_doador", "categoria"]
+
 class EntidadeViewSet(viewsets.ModelViewSet):
     """
     Endpoint da API que permite que as entidades sejam visualizadas ou editadas.
@@ -40,8 +54,41 @@ class EntidadeViewSet(viewsets.ModelViewSet):
 
     queryset = Entidade.objects.all().order_by('nome_fantasia')
     serializer_class = EntidadeSerializer
-    filterset_fields = ['eh_doador', 'eh_gestor']
-    search_fields = ['nome_fantasia', 'cnpj', 'razao_social']
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_class = EntidadeFilter
+    search_fields = ['nome_fantasia', 'documento', 'razao_social']
+    ordering_fields = ["razao_social", "nome_fantasia", "id"]
+    ordering = ["razao_social"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+
+        classificacao = self.request.query_params.get('classificacao')
+        if classificacao == 'gestor':
+            qs = qs.filter(eh_gestor=True)
+        elif classificacao == 'doador':
+            qs = qs.filter(eh_doador=True)
+        elif classificacao == 'ambos':
+            qs = qs.filter(eh_gestor=True, eh_doador=True)
+
+        categoria = self.request.query_params.get('categoria')
+        if categoria:
+            qs = qs.filter(categoria_id=categoria)
+
+        bairro = self.request.query_params.get('bairro')
+        if bairro:
+            qs = qs.filter(bairro__icontains=bairro)
+
+        # IMPORTANTÍSSIMO: seu relatório envia “search”
+        search = self.request.query_params.get('search')
+        if search:
+            qs = qs.filter(
+                Q(nome_fantasia__icontains=search) |
+                Q(razao_social__icontains=search) |
+                Q(documento__icontains=search)
+            )
+
+        return qs
 
     # NOVA AÇÃO: Histórico de Atendimentos (Saídas)
     @action(detail=True, methods=['get'])
@@ -296,3 +343,71 @@ class DashboardView(APIView):
         }
         
         return Response(data)
+
+class AlertaViewSet(viewsets.ModelViewSet):
+    queryset = Alerta.objects.all().order_by('-criado_em')
+    serializer_class = AlertaSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['lido']
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        lido = self.request.query_params.get('lido')
+        if lido is not None:
+            if lido.lower() in ('true', '1'):
+                qs = qs.filter(lido=True)
+            if lido.lower() in ('false', '0'):
+                qs = qs.filter(lido=False)
+        return qs
+
+    @action(detail=False, methods=['post'])
+    def marcar_todos_como_lidos(self, request):
+        count = Alerta.objects.filter(lido=False).update(lido=True)
+        return Response({'marked': count})
+
+    @action(detail=True, methods=['post'])
+    def marcar_como_lido(self, request, pk=None):
+        alerta = self.get_object()
+        alerta.lido = True
+        alerta.save(update_fields=['lido'])
+        return Response({'ok': True})
+
+    @action(detail=False, methods=['post'])
+    def gerar_pendentes(self, request):
+        """
+        Gera (idempotente) alertas de entidades gestoras sem atendimento há 60+ dias.
+        """
+        hoje = timezone.now().date()
+        limite = hoje - timedelta(days=60)
+
+        # entidades gestoras ativas
+        gestoras = Entidade.objects.filter(eh_gestor=True)
+
+        criados = 0
+        for g in gestoras:
+            # última saída para essa gestora
+            ultima_saida = (DoacaoRealizada.objects
+                            .filter(entidade_gestora=g)
+                            .order_by('-data_saida')
+                            .values_list('data_saida', flat=True)
+                            .first())
+
+            # sem registro algum OU último antes do limite
+            if (not ultima_saida) or (ultima_saida <= limite):
+                # evita duplicar alerta igual (mesma entidade, mesmo título base e não lido)
+                existe = Alerta.objects.filter(
+                    entidade=g,
+                    titulo='Entidade sem atendimento há 60+ dias',
+                    lido=False
+                ).exists()
+                if not existe:
+                    Alerta.objects.create(
+                        titulo='Entidade sem atendimento há 60+ dias',
+                        mensagem=f'<strong>{g.nome_fantasia or g.razao_social or "Entidade"}</strong> está sem atendimento desde {ultima_saida.strftime("%d/%m/%Y") if ultima_saida else "sempre"}.',
+                        entidade=g,
+                        severity='warn'
+                    )
+                    criados += 1
+
+        return Response({'gerados': criados}, status=status.HTTP_201_CREATED)

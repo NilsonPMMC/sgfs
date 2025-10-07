@@ -18,6 +18,11 @@ const categorias = ref([]);
 const loading = ref(true);
 const API_BASE_URL = 'http://127.0.0.1:8005/api/';
 const filters = ref({ global: { value: null, matchMode: FilterMatchMode.CONTAINS } });
+// ---- NOVOS ESTADOS ----
+const movimentacaoDialog = ref(false);
+const tipoMovimentacao = ref('E'); // 'E' Entrada, 'S' Saída
+const movimentacao = ref({ item: null, quantidade: 1, observacao: '' });
+
 
 const fetchData = async () => {
     loading.value = true;
@@ -45,6 +50,42 @@ const fetchData = async () => {
 };
 
 onMounted(fetchData);
+
+const openMovimentacaoDialog = (tipo) => {
+    tipoMovimentacao.value = tipo;
+    movimentacao.value = { item: null, quantidade: 1, observacao: '' };
+    movimentacaoDialog.value = true;
+};
+
+const saveMovimentacao = async () => {
+    if (!movimentacao.value.item || movimentacao.value.quantidade <= 0) {
+        toast.add({ severity: 'warn', summary: 'Atenção', detail: 'Selecione um item e informe a quantidade.', life: 3000 });
+        return;
+    }
+
+    const payload = {
+        item: movimentacao.value.item.id,
+        tipo_movimento: tipoMovimentacao.value,
+        quantidade: movimentacao.value.quantidade,
+        observacao: movimentacao.value.observacao || '',
+    };
+
+    try {
+        await axios.post(`${API_BASE_URL}movimentacoes-estoque/`, payload);
+        toast.add({
+            severity: 'success',
+            summary: 'Movimentação registrada',
+            detail: tipoMovimentacao.value === 'E' ? 'Entrada adicionada ao estoque.' : 'Saída registrada.',
+            life: 3000
+        });
+        movimentacaoDialog.value = false;
+        fetchData(); // atualiza o estoque
+    } catch (error) {
+        console.error('Erro ao registrar movimentação:', error);
+        toast.add({ severity: 'error', summary: 'Erro', detail: 'Falha ao registrar movimentação.', life: 3000 });
+    }
+};
+
 
 const openNew = () => {
     item.value = {};
@@ -116,18 +157,8 @@ const exportCSV = () => dt.value.exportCSV();
             <Toolbar class="mb-4">
                 <template #start>
                     <Button label="Novo Item" icon="pi pi-plus" class="p-button-success mr-3" @click="openNew" />
-                    <Button
-                        label="Registrar Entrada"
-                        icon="pi pi-arrow-down"
-                        class="p-button-secondary mr-3"
-                        @click="$router.push({ name: 'EntradaDoacao' })"
-                    />
-                    <Button
-                        label="Registrar Saída"
-                        icon="pi pi-arrow-up"
-                        class="p-button-help"
-                        @click="$router.push({ name: 'SaidaDoacao' })"
-                    />
+                    <Button label="Entrada Manual" icon="pi pi-arrow-down" class="p-button-secondary mr-3" @click="openMovimentacaoDialog('E')" />
+                    <Button label="Saída Manual" icon="pi pi-arrow-up" class="p-button-help mr-3" @click="openMovimentacaoDialog('S')" />
                 </template>
                 <template #end>
                     <Button label="Exportar CSV" icon="pi pi-upload" class="p-button-help" @click="exportCSV($event)" />
@@ -168,7 +199,7 @@ const exportCSV = () => dt.value.exportCSV();
                     </template>
                 </Column>
                 <Column field="unidade_medida" header="Unidade" sortable></Column>
-                <Column :exportable="false" style="min-width: 8rem">
+                <Column :exportable="false" header="Ações" style="min-width: 8rem">
                     <template #body="slotProps">
                         <Button icon="pi pi-pencil" outlined rounded class="mr-2" @click="editItem(slotProps.data)" />
                         <Button icon="pi pi-trash" outlined rounded severity="danger" @click="confirmDeleteItem(slotProps.data)" />
@@ -215,5 +246,40 @@ const exportCSV = () => dt.value.exportCSV();
                 <Button label="Sim" icon="pi pi-check" @click="deleteItem" />
             </template>
         </Dialog>
+
+        <Dialog v-model:visible="movimentacaoDialog" :style="{ width: '40rem' }" modal>
+            <template #header>
+                <h4 class="m-0">
+                    {{ tipoMovimentacao === 'E' ? 'Registrar Entrada Manual' : 'Registrar Saída Manual' }}
+                </h4>
+            </template>
+
+            <div class="flex flex-col gap-5">
+                <div>
+                    <label class="block font-bold mb-3">Item</label>
+                    <Dropdown v-model="movimentacao.item" :options="itens" optionLabel="nome" placeholder="Selecione o item" filter fluid />
+                </div>
+
+                <div>
+                    <label class="block font-bold mb-3">Quantidade</label>
+                    <InputNumber v-model="movimentacao.quantidade" mode="decimal" :min="1" fluid />
+                </div>
+
+                <div>
+                    <label class="block font-bold mb-3">Observação (opcional)</label>
+                    <Textarea v-model="movimentacao.observacao" rows="2" fluid />
+                </div>
+            </div>
+
+            <template #footer>
+                <Button label="Cancelar" icon="pi pi-times" text @click="movimentacaoDialog = false" />
+                <Button
+                    :label="tipoMovimentacao === 'E' ? 'Registrar Entrada' : 'Registrar Saída'"
+                    icon="pi pi-check"
+                    @click="saveMovimentacao"
+                />
+            </template>
+        </Dialog>
+
     </div>
 </template>

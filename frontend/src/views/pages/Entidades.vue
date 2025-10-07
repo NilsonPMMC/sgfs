@@ -1,6 +1,6 @@
 <script setup>
 import { useAuthStore } from '@/store/auth';
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, watch, computed, reactive } from 'vue';
 import { FilterMatchMode } from '@primevue/core/api';
 import { useToast } from 'primevue/usetoast';
 import axios from 'axios';
@@ -20,6 +20,12 @@ const filters = ref({
 });
 const submitted = ref(false);
 
+const filtros = reactive({
+  classificacao: null,   // string ou id, conforme seu Dropdown
+  categoria: null,       // objeto {id, nome} ou id
+  bairro: null,          // string
+});
+
 // NOVA VARIÁVEL PARA ARMAZENAR AS CATEGORIAS
 const categorias = ref([]); 
 const entidade = ref({
@@ -35,6 +41,59 @@ const formatDateToAPI = (date) => {
     // Formata para AAAA-MM-DD
     return d.toISOString().split('T')[0];
 }
+
+const onlyDigits = (s) => (s || '').replace(/\D/g, '');
+
+const isValidEmail = (s) => {
+  if (!s) return false;
+  // simples & eficaz; deixa o backend fazer validação final
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s);
+};
+
+const maskDoc = (s) => {
+  const d = onlyDigits(s);
+  if (!d) return '';
+  if (d.length > 11) {
+    // CNPJ: 00.000.000/0000-00
+    return d.replace(/^(\d{0,2})(\d{0,3})(\d{0,3})(\d{0,4})(\d{0,2}).*$/, (_, a,b,c,e,f) =>
+      [a, b && '.'+b, c && '.'+c, e && '/'+e, f && '-'+f].filter(Boolean).join('')
+    );
+  }
+  // CPF: 000.000.000-00
+  return d.replace(/^(\d{0,3})(\d{0,3})(\d{0,3})(\d{0,2}).*$/, (_, a,b,c,dig) =>
+    [a, b && '.'+b, c && '.'+c, dig && '-'+dig].filter(Boolean).join('')
+  );
+};
+
+const maskPhone = (s) => {
+  const d = onlyDigits(s).slice(0, 11);
+  if (!d) return '';
+  if (d.length <= 10) {
+    // (99) 9999-9999
+    return d.replace(/^(\d{0,2})(\d{0,4})(\d{0,4}).*$/, (_, a,b,c) =>
+      [a && `(${a})`, b && ' '+b, c && '-'+c].filter(Boolean).join('')
+    );
+  }
+  // (99) 99999-9999
+  return d.replace(/^(\d{0,2})(\d{0,5})(\d{0,4}).*$/, (_, a,b,c) =>
+    [a && `(${a})`, b && ' '+b, c && '-'+c].filter(Boolean).join('')
+  );
+};
+
+const onDocInput = (e) => { entidade.value.documento = onlyDigits(e.target.value).slice(0, 14); };
+const onPhoneInput = (contato, e) => { contato.valor = onlyDigits(e.target.value).slice(0, 11); };
+
+const formatDocumento = (v) => maskDoc(v);
+
+// Stats de contatos (para mostrar na lista e no form)
+const contatoStats = computed(() => {
+  const t = entidade.value?.contatos?.filter(c => c.tipo_contato === 'T').length || 0;
+  const e = entidade.value?.contatos?.filter(c => c.tipo_contato === 'E').length || 0;
+  return { telefones: t, emails: e };
+});
+
+// Para feedback “marcar pelo menos um toggle”
+const toggleError = ref(false);
 
 // --- BUSCA INICIAL DE DADOS ---
 const fetchData = async () => {
@@ -133,7 +192,7 @@ watch(entidade, (novoValor) => {
         const categoriaDoador = categorias.value.find(c => c.nome.toLowerCase() === 'doador');
         if (categoriaDoador) {
             // Define a categoria automaticamente
-            novoValor.categoria = categoriaDoador;
+            novoValor.categoria = categoriaDoador.id;
         }
     }
 }, { deep: true });
@@ -143,7 +202,9 @@ const openNew = () => {
         data_cadastro: new Date(),
         eh_doador: false,
         eh_gestor: false,
-        contatos: []
+        contatos: [],
+        documento: '',
+        cep: ''
     };
     submitted.value = false;
     entidadeDialog.value = true;
@@ -156,13 +217,26 @@ const hideDialog = () => {
 
 const saveEntidade = async () => {
     submitted.value = true;
-    if (!entidade.value.razao_social) return;
+    toggleError.value = !(entidade.value.eh_doador || entidade.value.eh_gestor);
+    if (!entidade.value.razao_social || toggleError.value) return;
+
+    // valida todos os emails dos contatos
+    const emailsInvalidos = entidade.value.contatos
+        .filter(c => c.tipo_contato === 'E')
+        .some(c => !isValidEmail(c.valor));
+    if (emailsInvalidos) {
+        toast.add({ severity: 'error', summary: 'E-mail inválido', detail: 'Verifique os endereços de e-mail nos contatos.', life: 3000 });
+        return;
+    }
 
     // 1. Prepara o payload da Entidade, formatando datas
     let entidadePayload = { ...entidade.value };
     entidadePayload.data_cadastro = formatDateToAPI(entidadePayload.data_cadastro);
     entidadePayload.vigencia_de = formatDateToAPI(entidadePayload.vigencia_de);
     entidadePayload.vigencia_ate = formatDateToAPI(entidadePayload.vigencia_ate);
+    entidadePayload.documento = onlyDigits(entidadePayload.documento);
+    entidadePayload.cep = onlyDigits(entidadePayload.cep);
+    entidadePayload.categoria = entidadePayload.categoria ?? null;
     
     // A API de entidade não lida com contatos, então removemos a lista do payload principal
     delete entidadePayload.contatos; 
@@ -181,6 +255,10 @@ const saveEntidade = async () => {
         // 3. Salva os Contatos
         const contatosPromises = entidade.value.contatos.map(contato => {
             const contatoPayload = { ...contato, entidade: savedEntidade.id };
+            if (contatoPayload.tipo_contato === 'T') {
+                contatoPayload.valor = onlyDigits(contatoPayload.valor); // telefone só dígitos
+            }
+            // e-mail vai como digitado (já validado)
             if (contato.id) {
                 // Atualiza contato existente
                 return axios.put(`${API_BASE_URL}contatos/${contato.id}/`, contatoPayload);
@@ -206,7 +284,9 @@ const editEntidade = (prod) => {
     // Busca a versão mais recente da entidade, incluindo os contatos aninhados
     axios.get(`${API_BASE_URL}entidades/${prod.id}/`).then(response => {
         entidade.value = response.data;
-        // Converte as strings de data para objetos Date que o Calendar entende
+        const cat = entidade.value.categoria;
+        entidade.value.categoria = (cat && typeof cat === 'object') ? cat.id : (cat ?? null);
+        
         if (entidade.value.data_cadastro) entidade.value.data_cadastro = new Date(entidade.value.data_cadastro);
         if (entidade.value.vigencia_de) entidade.value.vigencia_de = new Date(entidade.value.vigencia_de);
         if (entidade.value.vigencia_ate) entidade.value.vigencia_ate = new Date(entidade.value.vigencia_ate);
@@ -253,6 +333,81 @@ const deleteSelectedEntidades = () => {
         });
 };
 
+// opções do select de classificação
+const classificacoesOptions = [
+  { label: 'Todos', value: null },
+  { label: 'Gestor/Recebedor', value: 'gestor' },
+  { label: 'Doador', value: 'doador' },
+  { label: 'Ambos (Gestor e Doador)', value: 'ambos' }
+];
+
+// helper para pegar id da categoria selecionada (pode vir objeto ou id)
+const categoriaSelecionadaId = computed(() =>
+  typeof filtros.categoria === 'object' ? filtros.categoria?.id : filtros.categoria
+);
+
+// lista filtrada para a DataTable
+const entidadesFiltradas = computed(() => {
+  const termo = (filters.value?.global?.value || '').toString().toLowerCase().trim();
+  const catId = categoriaSelecionadaId.value;
+  const cls = filtros.classificacao;
+  const bairro = (filtros.bairro || '').toString().toLowerCase().trim();
+
+  return (entidades.value || []).filter(e => {
+    // filtro global (busca rápida)
+    const passaBusca =
+      !termo ||
+      (e.nome_fantasia || '').toLowerCase().includes(termo) ||
+      (e.razao_social || '').toLowerCase().includes(termo) ||
+      (e.documento || '').toString().includes(termo) ||
+      (e.bairro || '').toLowerCase().includes(termo);
+
+    // filtro classificação
+    let passaClassificacao = true;
+    if (cls === 'gestor') passaClassificacao = !!e.eh_gestor;
+    else if (cls === 'doador') passaClassificacao = !!e.eh_doador;
+    else if (cls === 'ambos') passaClassificacao = !!e.eh_gestor && !!e.eh_doador;
+
+    // filtro categoria
+    const idDoRegistro = typeof e.categoria === 'object' ? e.categoria?.id : e.categoria;
+    const passaCategoria = !catId || idDoRegistro === catId;
+
+    // filtro bairro
+    const passaBairro = !bairro || (e.bairro || '').toLowerCase().includes(bairro);
+
+    return passaBusca && passaClassificacao && passaCategoria && passaBairro;
+  });
+});
+
+// limpar filtros
+const limparFiltros = () => {
+  filtros.classificacao = null;
+  filtros.categoria = null;
+  filtros.bairro = null;
+  filters.value.global.value = null;
+};
+
+const buildRelatorioQuery = () => {
+  const qs = new URLSearchParams();
+
+  if (filtros.classificacao) qs.set('classificacao', filtros.classificacao);
+  
+  const categoriaId = typeof filtros.categoria === 'object' ? filtros.categoria?.id : filtros.categoria;
+  if (categoriaId) qs.set('categoria', categoriaId);
+
+  if (filtros.bairro) qs.set('bairro', filtros.bairro);
+
+  const q = filters.value?.global?.value;
+  if (q) qs.set('search', q);
+
+  return qs.toString();
+};
+
+const abrirRelatorioEntidades = () => {
+  const query = buildRelatorioQuery();
+  window.open(`/relatorios/entidades?${query}`, '_blank');
+};
+
 const exportCSV = () => {
     dt.value.exportCSV();
 };
@@ -270,6 +425,12 @@ const exportCSV = () => {
                 </template>
 
                 <template #end>
+                    <Button
+                        label="Relatório"
+                        icon="pi pi-print"
+                        class="p-button-help mr-2"
+                        @click="abrirRelatorioEntidades"
+                    />
                     <Button label="Exportar CSV" icon="pi pi-upload" class="p-button-help" @click="exportCSV($event)" />
                 </template>
             </Toolbar>
@@ -277,7 +438,7 @@ const exportCSV = () => {
             <DataTable
                 ref="dt"
                 v-model:selection="selectedEntidades"
-                :value="entidades"
+                :value="entidadesFiltradas"
                 dataKey="id"
                 :paginator="true"
                 :rows="10"
@@ -288,14 +449,58 @@ const exportCSV = () => {
             >
 
                 <template #header>
-                    <div class="flex flex-wrap gap-2 items-center justify-between">
+                    <div class="flex flex-col gap-3 w-full">
+                        <div class="flex flex-wrap gap-2 items-center justify-between">
                         <h4 class="m-0">Gerenciar Entidades</h4>
-                        <IconField>
+
+                        <div class="flex items-center gap-3">
+                            <!-- Busca global -->
+                            <IconField>
                             <InputIcon>
                                 <i class="pi pi-search" />
                             </InputIcon>
-                            <InputText v-model="filters['global'].value" placeholder="Buscar..." />
-                        </IconField>
+                            <InputText v-model="filters['global'].value" placeholder="Buscar (nome, doc, bairro)..." />
+                            </IconField>
+
+                            <!-- Botão limpar -->
+                            <Button icon="pi pi-filter-slash" label="Limpar" text @click="limparFiltros" />
+                        </div>
+                        </div>
+
+                        <!-- Linha de filtros -->
+                        <div class="grid grid-cols-12 gap-3">
+                        <div class="col-span-12 md:col-span-4">
+                            <label class="block text-sm font-semibold mb-1">Classificação</label>
+                            <Dropdown
+                            v-model="filtros.classificacao"
+                            :options="classificacoesOptions"
+                            optionLabel="label"
+                            optionValue="value"
+                            placeholder="Todos"
+                            showClear
+                            fluid
+                            />
+                        </div>
+
+                        <div class="col-span-12 md:col-span-4">
+                            <label class="block text-sm font-semibold mb-1">Categoria</label>
+                            <Dropdown
+                            v-model="filtros.categoria"
+                            :options="categorias"
+                            optionLabel="nome"
+                            optionValue="id"
+                            placeholder="Todas"
+                            showClear
+                            filter
+                            fluid
+                            />
+                        </div>
+
+                        <div class="col-span-12 md:col-span-4">
+                            <label class="block text-sm font-semibold mb-1">Bairro</label>
+                            <InputText v-model="filtros.bairro" placeholder="Ex.: Centro" fluid />
+                        </div>
+                        </div>
                     </div>
                 </template>
 
@@ -307,15 +512,25 @@ const exportCSV = () => {
                         </router-link>
                     </template>
                 </Column>
-                <Column field="cnpj" header="CNPJ" sortable style="min-width: 12rem"></Column>
+                <Column header="CNPJ ou CPF" sortable style="min-width: 12rem">
+                    <template #body="{ data }">
+                        {{ formatDocumento(data.documento) }}
+                    </template>
+                </Column>
                 <Column header="Classificação" style="min-width: 12rem">
                     <template #body="slotProps">
                         <Tag v-if="slotProps.data.eh_doador" value="Doador" severity="success" class="mr-2"></Tag>
                         <Tag v-if="slotProps.data.eh_gestor" value="Gestor" severity="info"></Tag>
                     </template>
                 </Column>
+                <Column header="Contatos" style="min-width: 10rem">
+                    <template #body="{ data }">
+                        <Tag v-if="data.contatos" :value="`${data.contatos.filter(c=>c.tipo_contato==='T').length} Tel`" class="mr-2" />
+                        <Tag v-if="data.contatos" :value="`${data.contatos.filter(c=>c.tipo_contato==='E').length} Email`" />
+                    </template>
+                </Column>
                 <Column field="bairro" header="Bairro" sortable style="min-width: 16rem"></Column>
-                <Column :exportable="false" style="min-width: 8rem">
+                <Column :exportable="false" header="Ações" style="min-width: 8rem">
                     <template #body="slotProps">
                         <Button icon="pi pi-pencil" outlined rounded class="mr-2" @click="editEntidade(slotProps.data)" />
                         <Button icon="pi pi-trash" outlined rounded severity="danger" @click="confirmDeleteEntidade(slotProps.data)" />
@@ -336,6 +551,9 @@ const exportCSV = () => {
                         <label for="doador-switch" class="font-bold ml-3"> Marcar como Doador</label>
                     </div>
                 </div>
+                <small class="p-error" v-if="submitted && toggleError">
+                    Marque pelo menos uma opção: Gestor/Recebedor ou Doador.
+                </small>
                 <Divider class="my-4" />
                 <div class="grid grid-cols-12 gap-4">
                     <div class="col-span-8">
@@ -344,9 +562,17 @@ const exportCSV = () => {
                         <small class="p-error" v-if="submitted && !entidade.razao_social">Razão Social é obrigatório.</small>
                     </div>
                     <div class="col-span-4">
-                        <label for="cnpj" class="block font-bold mb-3">CNPJ</label>
-                        <InputText id="cnpj" v-model.trim="entidade.cnpj" required="true" :class="{'p-invalid': submitted && !entidade.cnpj}" fluid />
-                        <small class="p-error" v-if="submitted && !entidade.cnpj">CNPJ é obrigatório.</small>
+                        <label for="documento" class="block font-bold mb-3">CNPJ ou CPF</label>
+                        <InputText
+                            id="documento"
+                            :value="maskDoc(entidade.documento)"
+                            @input="onDocInput"
+                            inputmode="numeric"
+                            required
+                            :class="{'p-invalid': submitted && !entidade.documento}"
+                            fluid
+                            />
+                        <small class="p-error" v-if="submitted && !entidade.documento">CNPJ ou CPF é obrigatório.</small>
                     </div>
                 </div>
                 <div class="grid grid-cols-12 gap-4">
@@ -356,7 +582,13 @@ const exportCSV = () => {
                     </div>
                     <div v-if="!entidade.eh_doador || entidade.eh_gestor" class="col-span-4">
                         <label for="categoria" class="block font-bold mb-3">Categoria</label>
-                        <Dropdown id="categoria" v-model="entidade.categoria" :options="categorias" optionLabel="nome" placeholder="Selecione" fluid></Dropdown>
+                        <Dropdown id="categoria"
+                            v-model="entidade.categoria"
+                            :options="categorias"
+                            optionLabel="nome"
+                            optionValue="id"
+                            placeholder="Selecione"
+                            fluid />
                     </div>
                 </div>
                 <div v-if="!entidade.eh_doador || entidade.eh_gestor" class="grid grid-cols-12 gap-4">
@@ -376,6 +608,9 @@ const exportCSV = () => {
                 <Divider class="m-0" align="left" type="solid">
                     <b>Contatos</b>
                 </Divider>
+                <div class="mb-2 text-sm text-gray-600">
+                    {{ contatoStats.telefones }} telefone(s) · {{ contatoStats.emails }} e-mail(s)
+                </div>
                 <div v-for="(contato, index) in entidade.contatos" :key="index">
                     <div class="grid grid-cols-12 gap-4">
                         <div class="col-span-2">
@@ -384,11 +619,28 @@ const exportCSV = () => {
                         </div>
                         <div class="col-span-5">
                             <label for="contato-valor" class="block font-bold mb-3">Contato</label>
-                            <InputText id="contato-valor" :value="contato.valor" fluid />
+                            <template v-if="contato.tipo_contato === 'T'">
+                                <InputText
+                                    :value="maskPhone(contato.valor)"
+                                    @input="(e) => onPhoneInput(contato, e)"
+                                    inputmode="tel"
+                                    fluid
+                                    />
+                            </template>
+                            <template v-else>
+                                <InputText v-model.trim="contato.valor"
+                                    type="email"
+                                    :class="{'p-invalid': contato.valor && !isValidEmail(contato.valor)}"
+                                    placeholder="email@exemplo.com"
+                                    fluid />
+                                <small class="p-error" v-if="contato.valor && !isValidEmail(contato.valor)">
+                                    E-mail inválido.
+                                </small>
+                            </template>
                         </div>
                         <div class="col-span-4">
                             <label for="contato-desc" class="block font-bold mb-3">Contato</label>
-                            <InputText id="contato-desc" :value="contato.descricao" placeholder="Ex: Celular, Whatsapp" fluid />
+                            <InputText v-model.trim="contato.descricao" placeholder="Ex: Celular, Whatsapp" fluid />
                         </div>
                         <div class="col-span-1">
                             <label class="block font-bold mb-3">&nbsp;</label>
@@ -403,7 +655,7 @@ const exportCSV = () => {
                 <div class="grid grid-cols-12 gap-4">
                     <div class="col-span-3">
                         <label for="cep" class="block font-bold mb-3">CEP</label>
-                        <InputMask id="cep" v-model="entidade.cep" mask="99999-999" fluid />
+                        <InputMask id="cep" v-model="entidade.cep" mask="99999-999" :unmask="true" fluid />
                     </div>
                     <div class="col-span-9">
                         <label for="logradouro" class="block font-bold mb-3">Logradouro (Rua, Av.)</label>

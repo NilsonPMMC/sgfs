@@ -16,7 +16,12 @@ class CategoriaEntidade(models.Model):
 class Entidade(models.Model):
     razao_social = models.CharField(max_length=255)
     nome_fantasia = models.CharField(max_length=255, blank=True)
-    cnpj = models.CharField(max_length=18, unique=True)
+    documento = models.CharField(
+        max_length=18,
+        unique=True,
+        verbose_name="CPF ou CNPJ",
+        help_text="Informe CPF ou CNPJ",
+    )
     categoria = models.ForeignKey(
         CategoriaEntidade, 
         on_delete=models.SET_NULL, 
@@ -109,3 +114,15 @@ class Beneficiario(models.Model):
 
     def __str__(self):
         return f'Beneficiário: {self.pessoa_fisica.nome_completo}'
+
+class Alerta(models.Model):
+    SEVERITY_CHOICES = (('info','info'),('warn','warn'),('danger','danger'))
+    titulo = models.CharField(max_length=200)
+    mensagem = models.TextField(blank=True)
+    entidade = models.ForeignKey('crm.Entidade', on_delete=models.CASCADE, related_name='alertas', null=True, blank=True)
+    severity = models.CharField(max_length=10, choices=SEVERITY_CHOICES, default='warn')
+    criado_em = models.DateTimeField(auto_now_add=True)
+    lido = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-criado_em']

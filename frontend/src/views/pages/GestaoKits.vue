@@ -168,7 +168,7 @@ const removerItemDoKit = (index) => {
                     {{ slotProps.data.itens_do_kit.length }}
                 </template>
             </Column>
-            <Column :exportable="false" style="min-width: 8rem">
+            <Column :exportable="false" header="Ações" style="min-width: 8rem">
                 <template #body="slotProps">
                     <Button icon="pi pi-pencil" outlined rounded class="mr-2" @click="editKit(slotProps.data)" />
                     <Button icon="pi pi-trash" outlined rounded severity="danger" @click="confirmDeleteKit(slotProps.data)" />
