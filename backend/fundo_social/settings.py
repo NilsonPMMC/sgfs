@@ -25,10 +25,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-9e0a)$hbq!r3*0$k!(3gwlh*i*v^#wjz2&9um-fxf)ji)w@xkw'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = ['fundosocial.mogidascruzes.sp.gov.br', '192.168.10.50', '127.0.0.1', 'localhost']
 
+CSRF_TRUSTED_ORIGINS = ['https://fundosocial.mogidascruzes.sp.gov.br']
 
 # Application definition
 
@@ -39,6 +40,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django_rest_passwordreset',
     'crm.apps.CrmConfig',
     'estoque.apps.EstoqueConfig',
     'rest_framework',
@@ -128,6 +130,8 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
@@ -139,7 +143,10 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
     # "http://fundosocial.mogidascruzes.sp.gov.br",
 #]
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOWED_ORIGINS = [
+    "https://fundosocial.mogidascruzes.sp.gov.br",
+]
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -197,4 +204,53 @@ SIMPLE_JWT = {
     "TOKEN_BLACKLIST_SERIALIZER": "rest_framework_simplejwt.serializers.TokenBlacklistSerializer",
     "SLIDING_TOKEN_OBTAIN_SERIALIZER": "rest_framework_simplejwt.serializers.TokenObtainSlidingSerializer",
     "SLIDING_TOKEN_REFRESH_SERIALIZER": "rest_framework_simplejwt.serializers.TokenRefreshSlidingSerializer",
+}
+
+# --- CONFIGURAÇÃO DE E-MAIL SMTP (MAILGRID - TI) ---
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'cloud77.mailgrid.net.br'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_USE_SSL = False
+EMAIL_HOST_USER = 'comunicacao.gabinete@mogidascruzes.sp.gov.br'
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
+DEFAULT_FROM_EMAIL = 'comunicacao.gabinete@mogidascruzes.sp.gov.br'
+
+
+# ==============================================================================
+# CONFIGURAÇÃO DE LOGGING PARA DEPURAÇÃO
+# ==============================================================================
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+        'file': {
+            'level': 'DEBUG', # Captura TUDO, desde debug até erros
+            'class': 'logging.FileHandler',
+            'filename': '/var/log/sgfs_django.log', # Arquivo de log
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO', # Evita poluir o log com detalhes internos do Django
+            'propagate': True,
+        },
+        'sgfs_app': { # Nosso logger personalizado
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG', # Nível mais detalhado para nossa aplicação
+            'propagate': True,
+        },
+    },
 }

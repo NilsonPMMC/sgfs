@@ -14,18 +14,7 @@ const op = ref();
 const us = ref();
 
 const handleLogout = () => {
-    // 1. Limpa os tokens do localStorage
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-
-    // 2. Remove o cabeçalho de autorização do Axios
-    delete axios.defaults.headers.common['Authorization'];
-
-    // 3. Reseta o estado do usuário na store
-    authStore.user = null;
-
-    // 4. Redireciona para a tela de login
-    router.push('/login');
+    authStore.logout();
 };
 </script>
 

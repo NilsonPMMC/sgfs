@@ -1,51 +1,71 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useToast } from 'primevue/usetoast';
-import { useAuthStore } from '@/store/auth'; // Importamos nosso store
-import axios from 'axios';
+import { useAuthStore } from '@/store/auth';
+import api from '@/services/api.js'; // 1. Usamos nosso serviço de API centralizado
 
+// Hooks e stores
 const router = useRouter();
 const toast = useToast();
-const authStore = useAuthStore(); // Usamos o store
+const authStore = useAuthStore();
 
-// Variáveis para os campos do formulário
+// Variáveis reativas para o formulário
 const username = ref('');
 const password = ref('');
+const checked = ref(false); // Para o checkbox "Lembrar"
 const loading = ref(false);
 
+// Função para o link "Esqueceu sua senha?"
+const goToForgotPassword = () => {
+    router.push('/forgot-password'); // Navega para a rota de recuperação
+};
+
+// Função principal de login
 const handleLogin = async () => {
     loading.value = true;
     try {
-        // 1. Envia as credenciais para o backend
-        const response = await axios.post('http://127.0.0.1:8005/api/token/', {
+        const response = await api.post('/token/', {
             username: username.value,
             password: password.value
         });
         
         const { access, refresh } = response.data;
 
-        // 2. Guarda os tokens no localStorage do navegador
+        // Guarda os tokens (o interceptor vai usar o 'accessToken')
         localStorage.setItem('accessToken', access);
         localStorage.setItem('refreshToken', refresh);
-
-        // 3. Configura o Axios para enviar o token em todas as futuras requisições
-        axios.defaults.headers.common['Authorization'] = `Bearer ${access}`;
         
-        // 4. Busca os dados e permissões do usuário logado
+        // A LINHA ABAIXO FOI REMOVIDA - O INTERCEPTOR FAZ ISSO AGORA!
+        // api.defaults.headers.common['Authorization'] = `Bearer ${access}`;
+        
         await authStore.fetchUser();
 
-        // 5. Redireciona para o Dashboard
-        router.push('/'); // Ou '/dashboard' se for sua rota principal
+        if (checked.value) {
+            localStorage.setItem('rememberedUsername', username.value);
+        } else {
+            localStorage.removeItem('rememberedUsername');
+        }
+
+        router.push('/');
 
     } catch (error) {
         console.error("Erro no login:", error);
-        password.value = ''; // Limpa a senha
+        password.value = '';
         toast.add({ severity: 'error', summary: 'Erro de Autenticação', detail: 'Usuário ou senha inválidos.', life: 4000 });
     } finally {
         loading.value = false;
     }
 };
+
+// 5. Lógica para preencher o usuário ao carregar a página
+onMounted(() => {
+    const rememberedUser = localStorage.getItem('rememberedUsername');
+    if (rememberedUser) {
+        username.value = rememberedUser;
+        checked.value = true;
+    }
+});
 </script>
 
 <template>
@@ -58,20 +78,17 @@ const handleLogin = async () => {
                         <div class="sgfs-logo">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Logo SGFS">
                                 <defs>
-                                    <radialGradient id="g-body" cx="256" cy="340.62" fx="256" fy="381.29" r="163.12"
-                                    gradientTransform="translate(0 26.14) scale(1 .92)" gradientUnits="userSpaceOnUse">
-                                    <stop offset=".4" stop-color="#b40d60"/>
-                                    <stop offset=".69" stop-color="#da1f75"/>
+                                    <radialGradient id="g-body" cx="256" cy="340.62" fx="256" fy="381.29" r="163.12" gradientTransform="translate(0 26.14) scale(1 .92)" gradientUnits="userSpaceOnUse">
+                                        <stop offset=".4" stop-color="#b40d60"/>
+                                        <stop offset=".69" stop-color="#da1f75"/>
                                     </radialGradient>
                                     <linearGradient id="g-head" x1="255.4" y1="151.59" x2="255.4" y2="-2.5" gradientUnits="userSpaceOnUse">
-                                    <stop offset="0" stop-color="#d52075"/>
-                                    <stop offset="1" stop-color="#f08b30"/>
+                                        <stop offset="0" stop-color="#d52075"/>
+                                        <stop offset="1" stop-color="#f08b30"/>
                                     </linearGradient>
                                 </defs>
-                                <path fill="url(#g-body)"
-                                    d="M222.48 498.94c-44.7 43.62-116.95-37.3-135.88-76.18-47.71-98 5.15-208.64 105.55-243.11 137.64-47.25 288.71 73.42 242.5 219.45-13.16 41.6-56.16 96.71-98.72 110.38-42.25 13.58-73.67-30.47-55.54-68.72 13.67-28.84 52.53-37.07 63.64-71.37 12.68-39.12-20.74-74.96-60.93-60.94-8.01 2.79-18.49 12.8-24.62 13.36-9.86.9-13.37-6.35-21.14-10.29-43.27-21.96-84.08 17.78-67.76 61.18 12.42 33.03 50.12 40.48 62.51 70.86 7.83 19.18 5.6 40.53-9.61 55.37Z"/>
-                                <path fill="url(#g-head)"
-                                    d="M246.97 155.38c115.25 10.31 114.69-170.76-6.19-154.32-85.52 11.63-82.91 146.35 6.19 154.32Z"/>
+                                <path fill="url(#g-body)" d="M222.48 498.94c-44.7 43.62-116.95-37.3-135.88-76.18-47.71-98 5.15-208.64 105.55-243.11 137.64-47.25 288.71 73.42 242.5 219.45-13.16 41.6-56.16 96.71-98.72 110.38-42.25 13.58-73.67-30.47-55.54-68.72 13.67-28.84 52.53-37.07 63.64-71.37 12.68-39.12-20.74-74.96-60.93-60.94-8.01 2.79-18.49 12.8-24.62 13.36-9.86.9-13.37-6.35-21.14-10.29-43.27-21.96-84.08 17.78-67.76 61.18 12.42 33.03 50.12 40.48 62.51 70.86 7.83 19.18 5.6 40.53-9.61 55.37Z"/>
+                                <path fill="url(#g-head)" d="M246.97 155.38c115.25 10.31 114.69-170.76-6.19-154.32-85.52 11.63-82.91 146.35 6.19 154.32Z"/>
                             </svg>
                         </div>
                         <div class="text-surface-900 dark:text-surface-0 text-3xl font-medium mb-4">SGFS</div>
@@ -88,9 +105,9 @@ const handleLogin = async () => {
                         <div class="flex items-center justify-between mt-2 mb-8 gap-8">
                             <div class="flex items-center">
                                 <Checkbox v-model="checked" id="rememberme1" binary class="mr-2"></Checkbox>
-                                <label for="rememberme1">Remember me</label>
+                                <label for="rememberme1">Lembrar</label>
                             </div>
-                            <span class="font-medium no-underline ml-2 text-right cursor-pointer text-primary">Forgot password?</span>
+                            <span @click="goToForgotPassword" class="font-medium no-underline ml-2 text-right cursor-pointer text-primary">Esqueceu sua senha?</span>
                         </div>
                         <Button label="Entrar" class="w-full" type="submit" :loading="loading"></Button>
                     </form>
@@ -101,6 +118,7 @@ const handleLogin = async () => {
 </template>
 
 <style scoped>
+/* Seu CSS aqui */
 .sgfs-logo {
     display: flex;
     align-items: center;

@@ -1,5 +1,11 @@
 # crm/admin.py
+import logging
 from django.contrib import admin
+from django.contrib.auth.models import User
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
+from django.contrib import messages
+from django.utils.crypto import get_random_string
 from django.http import HttpResponse
 from django.db.models import Q
 from .models import (
@@ -7,6 +13,8 @@ from .models import (
     PessoaFisica, Responsavel, Beneficiario
 )
 import csv
+
+logger = logging.getLogger('sgfs_app')
 
 # =========================
 # AÇÕES COMUNS (CSV, toggles)
@@ -180,3 +188,53 @@ class BeneficiarioAdmin(admin.ModelAdmin):
 admin.site.site_header = "SGFS — Administração"
 admin.site.site_title  = "SGFS Admin"
 admin.site.index_title = "Gestão Administrativa (CRM)"
+admin.site.unregister(User)
+
+def send_new_password(modeladmin, request, queryset):
+    logger.info(f"--- INICIANDO AÇÃO ADMIN: ENVIAR NOVA SENHA ---")
+    
+    # URL base do seu site
+    base_url = "https://fundosocial.mogidascruzes.sp.gov.br"
+
+    for user in queryset:
+        try:
+            password = get_random_string(12)
+            user.set_password(password)
+            user.save(update_fields=['password'])
+
+            context = {
+                'user_name': user.first_name or user.username,
+                'password': password,
+                'introductory_text': 'Conforme solicitado, uma nova senha de acesso foi gerada para você pelo administrador do sistema.',
+                # CORREÇÃO: Construindo a URL do logo de forma explícita e completa
+                'logo_url': f"{base_url}/static/crm/images/logo_sgfs.png",
+                'login_url': f"{base_url}/login"
+            }
+
+            html_content = render_to_string('crm/password_email.html', context)
+            text_content = f"Olá {context['user_name']},\n\nSua nova senha de acesso é: {password}"
+
+            email = EmailMultiAlternatives(
+                "Sua Nova Senha de Acesso ao SGFS",
+                text_content,
+                None,
+                [user.email]
+            )
+            email.attach_alternative(html_content, "text/html")
+            email.send(fail_silently=False)
+
+            logger.info(f"E-mail de nova senha enviado com SUCESSO para {user.email}.")
+        except Exception as e:
+            logger.error(f"FALHA ao enviar nova senha para {user.email}: {e}", exc_info=True)
+            modeladmin.message_user(request, f"Ocorreu um erro ao enviar a senha para {user.email}.", messages.ERROR)
+
+    modeladmin.message_user(request, f"Uma nova senha foi enviada para os {queryset.count()} usuários selecionados.", messages.SUCCESS)
+    logger.info(f"--- FIM DA AÇÃO ADMIN ---")
+
+send_new_password.short_description = "Gerar e enviar nova senha por e-mail"
+
+@admin.register(User)
+class UserAdmin(admin.ModelAdmin):
+    list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff')
+    actions = [send_new_password]
+    search_fields = ('username', 'first_name', 'last_name', 'email')
