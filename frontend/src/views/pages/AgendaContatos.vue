@@ -1,9 +1,10 @@
 <script setup>
+// 1. IMPORTAMOS SOMENTE A NOSSA INSTÂNCIA 'api'
+import api from '@/services/api';
 import { useAuthStore } from '@/store/auth';
 import { ref, onMounted } from 'vue';
 import { useToast } from 'primevue/usetoast';
-import { FilterMatchMode } from '@primevue/core/api'; 
-import axios from 'axios';
+import { FilterMatchMode } from '@primevue/core/api';
 
 // --- ESTADO DO COMPONENTE ---
 const authStore = useAuthStore();
@@ -11,25 +12,26 @@ const toast = useToast();
 const aniversariantes = ref([]);
 const agendaContatos = ref([]);
 const loading = ref(true);
-const API_BASE_URL = 'http://127.0.0.1:8005/api/';
 const dt = ref();
 const filters = ref({
     global: { value: null, matchMode: FilterMatchMode.CONTAINS }
 });
 
-// Estado para o CRUD de Pessoas
+// 2. REMOVEMOS A URL FIXA
+// const API_BASE_URL = 'http://127.0.0.1:8005/api/';
+
 const pessoaDialog = ref(false);
 const pessoa = ref({});
 const submitted = ref(false);
-
 const deletePessoaDialog = ref(false);
 const pessoaParaDeletar = ref({});
 
 // --- BUSCA DE DADOS ---
 const fetchData = () => {
     loading.value = true;
-    const aniversariantesReq = axios.get(`${API_BASE_URL}aniversariantes/`);
-    const agendaReq = axios.get(`${API_BASE_URL}agenda/`);
+    // 3. USAMOS 'api.get' COM CAMINHOS RELATIVOS
+    const aniversariantesReq = api.get('/aniversariantes/');
+    const agendaReq = api.get('/agenda/');
 
     Promise.all([aniversariantesReq, agendaReq])
         .then(([aniversariantesRes, agendaRes]) => {
@@ -50,8 +52,8 @@ const openNovaPessoa = () => {
 };
 
 const editPessoa = (contato) => {
-    // Busca os dados completos da pessoa para edição
-    axios.get(`${API_BASE_URL}pessoas/${contato.pessoa_id}/`).then(res => {
+    // 4. USAMOS 'api.get' PARA BUSCAR A PESSOA
+    api.get(`/pessoas/${contato.pessoa_id}/`).then(res => {
         pessoa.value = res.data;
         pessoaDialog.value = true;
     });
@@ -62,19 +64,21 @@ const savePessoa = () => {
     if (!pessoa.value.nome_completo) return;
 
     if (pessoa.value.id) { // Edição
-        axios.put(`${API_BASE_URL}pessoas/${pessoa.value.id}/`, pessoa.value)
+        // 5. USAMOS 'api.put' PARA ATUALIZAR
+        api.put(`/pessoas/${pessoa.value.id}/`, pessoa.value)
             .then(() => {
                 toast.add({ severity: 'success', summary: 'Sucesso', detail: 'Contato atualizado!', life: 3000 });
                 pessoaDialog.value = false;
-                fetchData(); // Atualiza a lista
+                fetchData();
             })
             .catch(() => toast.add({ severity: 'error', summary: 'Erro', detail: 'Não foi possível atualizar.', life: 3000 }));
-    } else { // Criação (Nota: criar por aqui não vincula a nenhuma entidade)
-        axios.post(`${API_BASE_URL}pessoas/`, pessoa.value)
+    } else { // Criação
+        // 6. USAMOS 'api.post' PARA CRIAR
+        api.post('/pessoas/', pessoa.value)
             .then(() => {
                 toast.add({ severity: 'success', summary: 'Sucesso', detail: 'Contato criado!', life: 3000 });
                 pessoaDialog.value = false;
-                fetchData(); // Atualiza a lista
+                fetchData();
             })
             .catch(() => toast.add({ severity: 'error', summary: 'Erro', detail: 'Não foi possível criar.', life: 3000 }));
     }
@@ -86,21 +90,21 @@ const confirmDeletePessoa = (contatoParaDeletar) => {
 };
 
 const deletePessoaConfirmado = () => {
-    axios.delete(`${API_BASE_URL}pessoas/${pessoaParaDeletar.value.pessoa_id}/`)
+    // 7. USAMOS 'api.delete' PARA DELETAR
+    api.delete(`/pessoas/${pessoaParaDeletar.value.pessoa_id}/`)
         .then(() => {
             toast.add({ severity: 'success', summary: 'Sucesso', detail: 'Contato deletado!', life: 3000 });
             deletePessoaDialog.value = false;
-            fetchData(); // Atualiza a lista
+            fetchData();
         })
         .catch(err => {
             console.error("Erro ao deletar:", err);
-            // Aviso importante: A exclusão pode falhar se a pessoa tiver outros vínculos
             toast.add({ severity: 'error', summary: 'Erro', detail: 'Não foi possível deletar. Verifique se a pessoa tem outros vínculos ativos.', life: 5000 });
             deletePessoaDialog.value = false;
         });
 };
 
-// --- NOVA FUNÇÃO: EXPORTAR CSV ---
+// --- FUNÇÃO DE EXPORTAR CSV ---
 const exportCSV = () => {
     dt.value.exportCSV();
 };

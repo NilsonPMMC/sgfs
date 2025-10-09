@@ -1,11 +1,13 @@
 <script setup>
+// 1. IMPORTAMOS APENAS A NOSSA INSTÂNCIA 'api'
+import api from '@/services/api';
 import { useAuthStore } from '@/store/auth';
 import { ref, onMounted } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { FilterMatchMode } from '@primevue/core/api';
-import axios from 'axios';
 import Tag from 'primevue/tag';
 
+// --- ESTADO DO COMPONENTE ---
 const authStore = useAuthStore();
 const toast = useToast();
 const dt = ref();
@@ -16,24 +18,27 @@ const item = ref({});
 const submitted = ref(false);
 const categorias = ref([]);
 const loading = ref(true);
-const API_BASE_URL = 'http://127.0.0.1:8005/api/';
 const filters = ref({ global: { value: null, matchMode: FilterMatchMode.CONTAINS } });
-// ---- NOVOS ESTADOS ----
+
+// 2. REMOVEMOS A URL FIXA
+// const API_BASE_URL = 'http://127.0.0.1:8005/api/';
+
 const movimentacaoDialog = ref(false);
-const tipoMovimentacao = ref('E'); // 'E' Entrada, 'S' Saída
+const tipoMovimentacao = ref('E');
 const movimentacao = ref({ item: null, quantidade: 1, observacao: '' });
 
-
+// --- BUSCA DE DADOS ---
 const fetchData = async () => {
     loading.value = true;
     let allItens = [];
-    let nextUrl = `${API_BASE_URL}itens/`; 
+    let nextUrl = '/itens/'; // A primeira chamada é relativa e usará o baseURL
 
     while (nextUrl) {
         try {
-            const response = await axios.get(nextUrl);
+            const response = await api.get(nextUrl);
             allItens = allItens.concat(response.data.results);
-            nextUrl = response.data.next;
+            // CORREÇÃO: Usamos a URL completa que a API nos dá para as próximas páginas
+            nextUrl = response.data.next; 
         } catch (error) {
             console.error("Erro ao buscar uma página de itens:", error);
             toast.add({ severity: 'error', summary: 'Erro', detail: 'Não foi possível carregar todos os itens.', life: 3000 });
@@ -44,13 +49,15 @@ const fetchData = async () => {
     itens.value = allItens;
     loading.value = false;
 
-    axios.get(`${API_BASE_URL}categorias-itens/`).then(response => {
+    // Esta parte continua igual e correta
+    api.get('/categorias-itens/').then(response => {
         categorias.value = Array.isArray(response.data) ? response.data : response.data.results;
     });
 };
 
 onMounted(fetchData);
 
+// --- MOVIMENTAÇÕES DE ESTOQUE ---
 const openMovimentacaoDialog = (tipo) => {
     tipoMovimentacao.value = tipo;
     movimentacao.value = { item: null, quantidade: 1, observacao: '' };
@@ -71,7 +78,8 @@ const saveMovimentacao = async () => {
     };
 
     try {
-        await axios.post(`${API_BASE_URL}movimentacoes-estoque/`, payload);
+        // 5. USAMOS 'api.post' PARA SALVAR A MOVIMENTAÇÃO
+        await api.post('/movimentacoes-estoque/', payload);
         toast.add({
             severity: 'success',
             summary: 'Movimentação registrada',
@@ -79,14 +87,14 @@ const saveMovimentacao = async () => {
             life: 3000
         });
         movimentacaoDialog.value = false;
-        fetchData(); // atualiza o estoque
+        fetchData();
     } catch (error) {
         console.error('Erro ao registrar movimentação:', error);
         toast.add({ severity: 'error', summary: 'Erro', detail: 'Falha ao registrar movimentação.', life: 3000 });
     }
 };
 
-
+// --- CRUD DE ITENS ---
 const openNew = () => {
     item.value = {};
     submitted.value = false;
@@ -108,8 +116,9 @@ const saveItem = () => {
     }
     delete payload.categoria;
     
-    if (item.value.id) { 
-        axios.put(`${API_BASE_URL}itens/${item.value.id}/`, payload)
+    if (item.value.id) {
+        // 6. USAMOS 'api.put' PARA ATUALIZAR O ITEM
+        api.put(`/itens/${item.value.id}/`, payload)
             .then(() => {
                 toast.add({ severity: 'success', summary: 'Sucesso', detail: 'Item atualizado!', life: 3000 });
                 itemDialog.value = false;
@@ -117,7 +126,8 @@ const saveItem = () => {
             })
             .catch(() => toast.add({ severity: 'error', summary: 'Erro', detail: 'Não foi possível atualizar.', life: 3000 }));
     } else {
-        axios.post(`${API_BASE_URL}itens/`, payload)
+        // 7. USAMOS 'api.post' PARA CRIAR O ITEM
+        api.post('/itens/', payload)
             .then(() => {
                 toast.add({ severity: 'success', summary: 'Sucesso', detail: 'Item criado!', life: 3000 });
                 itemDialog.value = false;
@@ -138,7 +148,8 @@ const confirmDeleteItem = (prod) => {
 };
 
 const deleteItem = () => {
-    axios.delete(`${API_BASE_URL}itens/${item.value.id}/`)
+    // 8. USAMOS 'api.delete' PARA DELETAR O ITEM
+    api.delete(`/itens/${item.value.id}/`)
         .then(() => {
             toast.add({ severity: 'success', summary: 'Sucesso', detail: 'Item deletado!', life: 3000 });
             deleteItemDialog.value = false;

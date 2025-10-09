@@ -1,11 +1,10 @@
 <script setup>
+// 1. IMPORTAMOS A NOSSA INSTÂNCIA 'api'
+import api from '@/services/api';
 import { ref, computed, onMounted } from 'vue';
-import axios from 'axios';
 import { useToast } from 'primevue/usetoast';
 import { useRoute, useRouter } from 'vue-router';
 
-// (Se seus componentes PrimeVue são registrados globalmente, estes imports são opcionais.
-// Mantive para manter consistência com seu projeto.)
 import Card from 'primevue/card';
 import AutoComplete from 'primevue/autocomplete';
 import Calendar from 'primevue/calendar';
@@ -20,19 +19,19 @@ const toast = useToast();
 const route = useRoute();
 const router = useRouter();
 
-// Base da API (troque por env se preferir)
-const API_BASE_URL = 'http://127.0.0.1:8005/api/';
+// 2. REMOVEMOS A URL FIXA
+// const API_BASE_URL = 'http://127.0.0.1:8005/api/';
 
 // ---- helpers ----
 const getApiErrorMessage = (error) => {
-  const data = error?.response?.data;
-  if (data?.detail) return data.detail;
-  if (Array.isArray(data) && data[0]) return data[0];
-  if (data && typeof data === 'object') {
-    const first = Object.values(data)[0];
-    if (Array.isArray(first) && first[0]) return first[0];
-  }
-  return 'Não foi possível registrar/atualizar a doação.';
+    const data = error?.response?.data;
+    if (data?.detail) return data.detail;
+    if (Array.isArray(data) && data[0]) return data[0];
+    if (data && typeof data === 'object') {
+        const first = Object.values(data)[0];
+        if (Array.isArray(first) && first[0]) return first[0];
+    }
+    return 'Não foi possível registrar/atualizar a doação.';
 };
 const voltar = () => router.back();
 
@@ -42,152 +41,150 @@ const doadoresEncontrados = ref([]);
 const itensEncontrados = ref([]);
 
 const novaDoacao = ref({
-  data_doacao: new Date(),
-  doador: null,
-  observacoes: '',
-  itens_doados: [{ item: null, quantidade: 1 }]
+    data_doacao: new Date(),
+    doador: null,
+    observacoes: '',
+    itens_doados: [{ item: null, quantidade: 1 }]
 });
 
-// create vs edit
 const editing = computed(() => Boolean(route.params.id));
 
 // ---- computeds ----
 const podeSalvar = computed(() => {
-  const d = novaDoacao.value;
-  const temItensValidos = d.itens_doados.length > 0 && d.itens_doados.every(i => i.item && Number(i.quantidade) > 0);
-  return !!d.doador && temItensValidos && !salvando.value;
+    const d = novaDoacao.value;
+    const temItensValidos = d.itens_doados.length > 0 && d.itens_doados.every(i => i.item && Number(i.quantidade) > 0);
+    return !!d.doador && temItensValidos && !salvando.value;
 });
 const totalLinhas = computed(() => novaDoacao.value.itens_doados.length);
 
 // ---- buscas ----
 const searchDoador = async (event) => {
-  try {
-    const q = encodeURIComponent(event?.query || '');
-    const resp = await axios.get(`${API_BASE_URL}entidades/?eh_doador=true&search=${q}`);
-    const results = Array.isArray(resp.data?.results) ? resp.data.results : [];
-    doadoresEncontrados.value = results.map(r => ({
-      ...r,
-      nome: r.nome_fantasia || r.razao_social || r.nome_completo || r.nome || 'Sem nome'
-    }));
-  } catch {
-    doadoresEncontrados.value = [];
-  }
+    try {
+        const q = encodeURIComponent(event?.query || '');
+        // 3. USAMOS 'api.get' COM CAMINHO RELATIVO
+        const resp = await api.get(`/entidades/?eh_doador=true&search=${q}`);
+        const results = Array.isArray(resp.data?.results) ? resp.data.results : [];
+        doadoresEncontrados.value = results.map(r => ({
+            ...r,
+            nome: r.nome_fantasia || r.razao_social || r.nome_completo || r.nome || 'Sem nome'
+        }));
+    } catch {
+        doadoresEncontrados.value = [];
+    }
 };
 
-
 const searchItem = async (event) => {
-  try {
-    const resp = await axios.get(`${API_BASE_URL}itens/?search=${encodeURIComponent(event.query || '')}`);
-    itensEncontrados.value = Array.isArray(resp.data?.results) ? resp.data.results : [];
-  } catch {
-    itensEncontrados.value = [];
-  }
+    try {
+        // 4. USAMOS 'api.get' COM CAMINHO RELATIVO
+        const resp = await api.get(`/itens/?search=${encodeURIComponent(event.query || '')}`);
+        itensEncontrados.value = Array.isArray(resp.data?.results) ? resp.data.results : [];
+    } catch {
+        itensEncontrados.value = [];
+    }
 };
 
 // ---- linhas de itens ----
 const adicionarItem = () => {
-  novaDoacao.value.itens_doados.push({ item: null, quantidade: 1 });
+    novaDoacao.value.itens_doados.push({ item: null, quantidade: 1 });
 };
 const removerItem = (index) => {
-  if (novaDoacao.value.itens_doados.length === 1) return; // evita ficar sem nenhuma linha
-  novaDoacao.value.itens_doados.splice(index, 1);
+    if (novaDoacao.value.itens_doados.length === 1) return;
+    novaDoacao.value.itens_doados.splice(index, 1);
 };
 
 const fetchEntidadeById = async (id) => {
-  if (!id) return null;
-  try {
-    const { data } = await axios.get(`${API_BASE_URL}entidades/${id}/`);
-    return { ...data, nome: data.nome_fantasia || data.razao_social || 'Sem nome' };
-  } catch {
-    return null;
-  }
+    if (!id) return null;
+    try {
+        // 5. USAMOS 'api.get' COM CAMINHO RELATIVO
+        const { data } = await api.get(`/entidades/${id}/`);
+        return { ...data, nome: data.nome_fantasia || data.razao_social || 'Sem nome' };
+    } catch {
+        return null;
+    }
 };
 
 // ---- carregar (prefill/edição) ----
 onMounted(async () => {
-  const q = route.query;
+    const q = route.query;
 
-  // Prefill SÓ se veio algo da rota anterior
-  if (!editing.value && (q?.doador_id || q?.doador_nome)) {
-    novaDoacao.value.doador = {
-      id: q.doador_id ? Number(q.doador_id) : null,
-      nome: q.doador_nome || ''
-    };
-  } else {
-    // Acesso direto: mantém vazio para aparecer o placeholder
-    novaDoacao.value.doador = null;
-  }
-
-  // Edição: carrega a doação existente
-  if (editing.value) {
-    try {
-      const { id } = route.params;
-      const resp = await axios.get(`${API_BASE_URL}doacoes-recebidas/${id}/`);
-      const d = resp.data;
-
-      const doadorEntidade = await fetchEntidadeById(d.object_id);
-
-      novaDoacao.value.data_doacao = d.data_doacao ? new Date(d.data_doacao) : new Date();
-      novaDoacao.value.observacoes = d.observacoes || '';
-      novaDoacao.value.doador = doadorEntidade
-        ? doadorEntidade
-        : { id: d.object_id, nome: '' }; // sem rótulo fixo
-
-      novaDoacao.value.itens_doados = Array.isArray(d.itens_doados) && d.itens_doados.length
-        ? d.itens_doados.map(it => ({
-            item: it.item,
-            quantidade: Number(it.quantidade) || 0
-          }))
-        : [{ item: null, quantidade: 1 }];
-    } catch (err) {
-      console.error('Falha ao carregar doação para edição:', err?.response?.data || err);
-      toast.add({ severity: 'error', summary: 'Erro', detail: 'Não foi possível carregar a doação.', life: 5000 });
+    if (!editing.value && (q?.doador_id || q?.doador_nome)) {
+        novaDoacao.value.doador = {
+            id: q.doador_id ? Number(q.doador_id) : null,
+            nome: q.doador_nome || ''
+        };
+    } else {
+        novaDoacao.value.doador = null;
     }
-  }
+
+    if (editing.value) {
+        try {
+            const { id } = route.params;
+            // 6. USAMOS 'api.get' COM CAMINHO RELATIVO
+            const resp = await api.get(`/doacoes-recebidas/${id}/`);
+            const d = resp.data;
+
+            const doadorEntidade = await fetchEntidadeById(d.object_id);
+
+            novaDoacao.value.data_doacao = d.data_doacao ? new Date(d.data_doacao) : new Date();
+            novaDoacao.value.observacoes = d.observacoes || '';
+            novaDoacao.value.doador = doadorEntidade ? doadorEntidade : { id: d.object_id, nome: '' };
+            
+            novaDoacao.value.itens_doados = Array.isArray(d.itens_doados) && d.itens_doados.length
+                ? d.itens_doados.map(it => ({
+                    item: it.item,
+                    quantidade: Number(it.quantidade) || 0
+                }))
+                : [{ item: null, quantidade: 1 }];
+        } catch (err) {
+            console.error('Falha ao carregar doação para edição:', err?.response?.data || err);
+            toast.add({ severity: 'error', summary: 'Erro', detail: 'Não foi possível carregar a doação.', life: 5000 });
+        }
+    }
 });
 
 // ---- submit ----
 const saveDoacao = async () => {
-  if (!podeSalvar.value) {
-    toast.add({ severity: 'warn', summary: 'Atenção', detail: 'Preencha o doador e ao menos um item com quantidade.', life: 3000 });
-    return;
-  }
-
-  salvando.value = true;
-
-  const d = novaDoacao.value;
-  const payload = {
-    data_doacao: d.data_doacao instanceof Date ? d.data_doacao.toISOString().split('T')[0] : d.data_doacao,
-    observacoes: d.observacoes || '',
-    object_id: d.doador?.id, // o backend já preenche content_type=Entidade se faltar
-    itens_doados: d.itens_doados
-      .filter(i => i.item?.id && Number(i.quantidade) > 0)
-      .map(i => ({ item_id: i.item.id, quantidade: i.quantidade }))
-  };
-
-  try {
-    if (editing.value) {
-      await axios.put(`${API_BASE_URL}doacoes-recebidas/${route.params.id}/`, payload);
-      toast.add({ severity: 'success', summary: 'Sucesso', detail: 'Doação atualizada!', life: 3500 });
-      router.push({ name: 'ListaEntradas' });
-    } else {
-      console.log('payload doacao recebida ->', payload);
-      await axios.post(`${API_BASE_URL}doacoes-recebidas/`, payload);
-      toast.add({ severity: 'success', summary: 'Sucesso', detail: 'Doação registrada! Estoque atualizado.', life: 4000 });
-      novaDoacao.value = {
-        data_doacao: new Date(),
-        doador: null,
-        observacoes: '',
-        itens_doados: [{ item: null, quantidade: 1 }]
-      };
-      router.push({ name: 'ListaEntradas' });
+    if (!podeSalvar.value) {
+        toast.add({ severity: 'warn', summary: 'Atenção', detail: 'Preencha o doador e ao menos um item com quantidade.', life: 3000 });
+        return;
     }
-  } catch (err) {
-    const msg = getApiErrorMessage(err);
-    toast.add({ severity: 'error', summary: 'Erro', detail: msg, life: 6000 });
-  } finally {
-    salvando.value = false;
-  }
+
+    salvando.value = true;
+
+    const d = novaDoacao.value;
+    const payload = {
+        data_doacao: d.data_doacao instanceof Date ? d.data_doacao.toISOString().split('T')[0] : d.data_doacao,
+        observacoes: d.observacoes || '',
+        object_id: d.doador?.id,
+        itens_doados: d.itens_doados
+            .filter(i => i.item?.id && Number(i.quantidade) > 0)
+            .map(i => ({ item_id: i.item.id, quantidade: i.quantidade }))
+    };
+
+    try {
+        if (editing.value) {
+            // 7. USAMOS 'api.put' COM CAMINHO RELATIVO
+            await api.put(`/doacoes-recebidas/${route.params.id}/`, payload);
+            toast.add({ severity: 'success', summary: 'Sucesso', detail: 'Doação atualizada!', life: 3500 });
+            router.push({ name: 'ListaEntradas' });
+        } else {
+            // 8. USAMOS 'api.post' COM CAMINHO RELATIVO
+            await api.post('/doacoes-recebidas/', payload);
+            toast.add({ severity: 'success', summary: 'Sucesso', detail: 'Doação registrada! Estoque atualizado.', life: 4000 });
+            novaDoacao.value = {
+                data_doacao: new Date(),
+                doador: null,
+                observacoes: '',
+                itens_doados: [{ item: null, quantidade: 1 }]
+            };
+            router.push({ name: 'ListaEntradas' });
+        }
+    } catch (err) {
+        const msg = getApiErrorMessage(err);
+        toast.add({ severity: 'error', summary: 'Erro', detail: msg, life: 6000 });
+    } finally {
+        salvando.value = false;
+    }
 };
 </script>
 

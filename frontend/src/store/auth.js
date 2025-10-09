@@ -8,7 +8,10 @@ export const useAuthStore = defineStore('auth', {
         user: null
     }),
     getters: {
-        // ... (getters ficam como estão)
+        isAuthenticated: (state) => !!state.user,
+        hasPermission: (state) => (permissionCodename) => {
+            return state.user?.permissions?.includes(permissionCodename);
+        }
     },
     actions: {
         async fetchUser() {

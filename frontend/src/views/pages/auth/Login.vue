@@ -47,7 +47,7 @@ const handleLogin = async () => {
             localStorage.removeItem('rememberedUsername');
         }
 
-        router.push('/');
+        router.push({ name: 'dashboard' });
 
     } catch (error) {
         console.error("Erro no login:", error);

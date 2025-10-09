@@ -1,23 +1,31 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
-import axios from 'axios';
+// 1. IMPORTAMOS A NOSSA INSTÂNCIA 'api'
+import api from '@/services/api';
 import ReportLayout from '@/views/reports/ReportLayout.vue';
 import Divider from 'primevue/divider';
 
 const route = useRoute();
-const API = 'http://127.0.0.1:8005/api/';
+// 2. REMOVEMOS A URL FIXA
+// const API = 'http://127.0.0.1:8005/api/';
 const rec = ref(null);
 const loading = ref(true);
 
 const printNow = () => window.print();
 
 onMounted(async () => {
-  loading.value = true;
-  const id = route.params.id;
-  const r = await axios.get(`${API}doacoes-recebidas/${id}/`);
-  rec.value = r.data;
-  loading.value = false;
+    loading.value = true;
+    const id = route.params.id;
+    try {
+        // 3. USAMOS 'api.get' COM CAMINHO RELATIVO
+        const r = await api.get(`/doacoes-recebidas/${id}/`);
+        rec.value = r.data;
+    } catch (error) {
+        console.error("Erro ao buscar dados do relatório:", error);
+    } finally {
+        loading.value = false;
+    }
 });
 </script>
 

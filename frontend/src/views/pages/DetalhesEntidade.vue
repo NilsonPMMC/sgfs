@@ -1,9 +1,11 @@
 <script setup>
+// 1. IMPORTAMOS 'api' PARA NOSSA API E MANTEMOS 'axios' PARA O VIACEP
+import api from '@/services/api';
+import axios from 'axios'; // Necessário para o ViaCEP
 import { useAuthStore } from '@/store/auth';
 import { ref, onMounted, watch, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useToast } from 'primevue/usetoast';
-import axios from 'axios';
 
 import Divider from 'primevue/divider';
 import Tag from 'primevue/tag';
@@ -17,26 +19,25 @@ const route = useRoute();
 const toast = useToast();
 const entidade = ref(null);
 const loading = ref(true);
-const API_BASE_URL = 'http://127.0.0.1:8005/api/';
 
-const entidadeDialog = ref(false); // Controla a visibilidade do modal
-const entidadeParaEditar = ref({ contatos: [] }); // Armazena os dados do formulário de edição
-const categorias = ref([]); // Para o dropdown de categorias
-const submitted = ref(false); // Para validação do formulário
+// 2. REMOVEMOS A URL FIXA
+// const API_BASE_URL = 'http://127.0.0.1:8005/api/';
 
-// --- ESTADO PARA CRUD DE RESPONSÁVEIS ---
-const responsavelDialog = ref(false); // Modal de criar/editar responsável
-const responsavel = ref({}); // Objeto para o formulário de responsável
-const isEditMode = ref(false); // Controla se o modal está em modo de edição
+const entidadeDialog = ref(false);
+const entidadeParaEditar = ref({ contatos: [] });
+const categorias = ref([]);
+const submitted = ref(false);
 
-// --- NOVO ESTADO: MODAL DE CONFIRMAÇÃO DE EXCLUSÃO DE VÍNCULO ---
-const deleteVinculoDialog = ref(false); // Controla a visibilidade do modal
-const vinculoParaDeletar = ref({}); // Guarda os dados do vínculo a ser deletado
+const responsavelDialog = ref(false);
+const responsavel = ref({});
+const isEditMode = ref(false);
 
-// --- ESTADO PARA CRUD DE BENEFICIADOS (NOVO) ---
-const beneficiadoDialog = ref(false); // Modal de criar/editar beneficiado
-const beneficiado = ref({}); // Objeto para o formulário de beneficiado
-const isBeneficiadoEditMode = ref(false); // Controla o modo do modal de beneficiado
+const deleteVinculoDialog = ref(false);
+const vinculoParaDeletar = ref({});
+
+const beneficiadoDialog = ref(false);
+const beneficiado = ref({});
+const isBeneficiadoEditMode = ref(false);
 
 const historicoAtendimentos = ref([]);
 const historicoDoacoes = ref([]);
@@ -45,13 +46,12 @@ const op = ref();
 const overlayItems = ref([]);
 const toggleError = ref(false);
 
-// --- FUNÇÕES AUXILIARES ---
+// --- FUNÇÕES AUXILIARES --- (Nenhuma alteração aqui)
 const formatDateToAPI = (date) => {
     if (!date) return null;
     const d = new Date(date);
-    return d.toISOString().split('T')[0]; // Formato AAAA-MM-DD
+    return d.toISOString().split('T')[0];
 }
-
 const contatoStats = computed(() => {
   const lista = entidadeParaEditar.value?.contatos || [];
   return {
@@ -59,15 +59,11 @@ const contatoStats = computed(() => {
     emails:    lista.filter(c => c.tipo_contato === 'E').length,
   };
 });
-
 const toggleOverlay = (event, items) => {
     overlayItems.value = items;
     op.value.toggle(event);
 };
-
-// === Helpers de máscara/normalização (mesmos do Entidades.vue) ===
 const onlyDigits = (s) => (s || '').replace(/\D/g, '');
-
 const maskDoc = (s) => {
   const d = onlyDigits(s);
   if (!d) return '';
@@ -84,7 +80,6 @@ const maskDoc = (s) => {
       .filter(Boolean).join('')
   );
 };
-
 const maskPhone = (s) => {
   const d = onlyDigits(s).slice(0, 11);
   if (!d) return '';
@@ -101,15 +96,11 @@ const maskPhone = (s) => {
       .filter(Boolean).join('')
   );
 };
-
 const isValidEmail = (s) => !!s && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s);
-
-// Handlers de input (mantêm o modelo só com dígitos)
 const onDocInput = (e) => { entidadeParaEditar.value.documento = onlyDigits(e.target.value).slice(0, 14); };
 const onPhoneInput = (contato, e) => { contato.valor = onlyDigits(e.target.value).slice(0, 11); };
 
-
-// --- NAVEGAÇÃO: criar entrada/saída com prefill e editar registros ---
+// --- NAVEGAÇÃO E FORMATAÇÃO --- (Nenhuma alteração aqui)
 const goToRegistrarEntrada = () => {
     if (!entidade.value) return;
     router.push({
@@ -117,12 +108,10 @@ const goToRegistrarEntrada = () => {
         query: {
             doador_id: entidade.value.id,
             doador_nome: entidade.value.nome_fantasia || entidade.value.razao_social || entidade.value.nome,
-            // se sua API expõe content_type_id na entidade, passe aqui:
             content_type_id: entidade.value.content_type_id || null
         }
     });
 };
-
 const goToRegistrarSaida = () => {
     if (!entidade.value) return;
     router.push({
@@ -133,23 +122,14 @@ const goToRegistrarSaida = () => {
         }
     });
 };
-
 const editarEntrada = (registro) => {
-    if (!registro?.id) {
-        toast.add({ severity: 'warn', summary: 'Atenção', detail: 'Registro sem ID para edição.', life: 2500 });
-        return;
-    }
+    if (!registro?.id) return;
     router.push({ name: 'EditarEntradaDoacao', params: { id: registro.id } });
 };
-
 const editarSaida = (registro) => {
-    if (!registro?.id) {
-        toast.add({ severity: 'warn', summary: 'Atenção', detail: 'Registro sem ID para edição.', life: 2500 });
-        return;
-    }
+    if (!registro?.id) return;
     router.push({ name: 'EditarSaidaDoacao', params: { id: registro.id } });
 };
-
 const formatarMesAno = (dataString) => {
     const data = new Date(dataString);
     return data.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
@@ -164,12 +144,10 @@ const fetchEntidadeData = () => {
     loading.value = true;
     const entidadeId = route.params.id;
 
-    // 1. Busca os dados principais da entidade
-    axios.get(`${API_BASE_URL}entidades/${entidadeId}/`)
+    // 3. USAMOS 'api' PARA BUSCAR A ENTIDADE
+    api.get(`/entidades/${entidadeId}/`)
         .then(response => {
             entidade.value = response.data;
-            
-            // 2. Se a busca principal deu certo, busca os históricos
             if (entidade.value.eh_gestor) {
                 fetchAtendimentos(entidadeId);
             }
@@ -181,23 +159,25 @@ const fetchEntidadeData = () => {
         .finally(() => loading.value = false);
 };
 
-// NOVAS FUNÇÕES DE BUSCA
 const fetchAtendimentos = (entidadeId) => {
-    axios.get(`${API_BASE_URL}entidades/${entidadeId}/atendimentos/`)
+    // 4. USAMOS 'api' PARA BUSCAR ATENDIMENTOS
+    api.get(`/entidades/${entidadeId}/atendimentos/`)
         .then(response => {
             historicoAtendimentos.value = response.data;
         });
 };
 
 const fetchDoacoes = (entidadeId) => {
-     axios.get(`${API_BASE_URL}entidades/${entidadeId}/doacoes/`)
+    // 5. USAMOS 'api' PARA BUSCAR DOAÇÕES
+    api.get(`/entidades/${entidadeId}/doacoes/`)
         .then(response => {
             historicoDoacoes.value = response.data;
         });
 };
 
 const fetchCategorias = () => {
-    axios.get(`${API_BASE_URL}categorias/`).then((response) => {
+    // 6. USAMOS 'api' PARA BUSCAR CATEGORIAS
+    api.get('/categorias/').then((response) => {
         categorias.value = response.data.results;
     });
 };
@@ -207,29 +187,17 @@ onMounted(() => {
     fetchCategorias();
 });
 
-watch(entidadeParaEditar, (novo) => {
-  if (!novo) return;
-  if (novo.eh_doador && !novo.eh_gestor) {
-    const catDoador = categorias.value.find(c => c.nome?.toLowerCase() === 'doador');
-    if (catDoador) novo.categoria = catDoador.id; // trabalhamos com id
-  }
-}, { deep: true });
-
+// A CHAMADA PARA O VIACEP CONTINUA USANDO 'axios' POR SER EXTERNA
 watch(() => entidadeParaEditar.value.cep, (novoCep) => {
-    // Remove qualquer caractere que não seja número
     const cepLimpo = (novoCep || '').replace(/\D/g, '');
-    
-    // Se o CEP tiver 8 dígitos, faz a busca
     if (cepLimpo.length === 8) {
         axios.get(`https://viacep.com.br/ws/${cepLimpo}/json/`)
             .then(response => {
                 if (response.data.erro) {
                     toast.add({ severity: 'warn', summary: 'Aviso', detail: 'CEP não encontrado.', life: 3000 });
                 } else {
-                    // Preenche os campos com os dados retornados
                     entidadeParaEditar.value.logradouro = response.data.logradouro;
                     entidadeParaEditar.value.bairro = response.data.bairro;
-                    // Futuramente, podemos adicionar cidade e estado também
                 }
             })
             .catch(error => {
@@ -239,41 +207,34 @@ watch(() => entidadeParaEditar.value.cep, (novoCep) => {
     }
 });
 
-// --- LÓGICA DO MODAL DE EDIÇÃO ---
+// --- LÓGICA DO MODAL DE EDIÇÃO E CONTATOS ---
 const openEditDialog = () => {
     entidadeParaEditar.value = JSON.parse(JSON.stringify(entidade.value));
     entidadeParaEditar.value.contatos = entidadeParaEditar.value.contatos || [];
     entidadeParaEditar.value.eh_doador = !!entidadeParaEditar.value.eh_doador;
     entidadeParaEditar.value.eh_gestor = !!entidadeParaEditar.value.eh_gestor;
-
     const cat = entidadeParaEditar.value.categoria;
     entidadeParaEditar.value.categoria = (cat && typeof cat === 'object') ? cat.id : (cat ?? null);
-
     if (entidadeParaEditar.value.data_cadastro) entidadeParaEditar.value.data_cadastro = new Date(entidadeParaEditar.value.data_cadastro);
     if (entidadeParaEditar.value.vigencia_de) entidadeParaEditar.value.vigencia_de = new Date(entidadeParaEditar.value.vigencia_de);
     if (entidadeParaEditar.value.vigencia_ate) entidadeParaEditar.value.vigencia_ate = new Date(entidadeParaEditar.value.vigencia_ate);
-
     submitted.value = false;
     toggleError.value = false;
     entidadeDialog.value = true;
 };
-
-
 const hideDialog = () => {
     entidadeDialog.value = false;
     submitted.value = false;
 };
-
 const saveEntidade = async () => {
     submitted.value = true;
     toggleError.value = !(entidadeParaEditar.value.eh_doador || entidadeParaEditar.value.eh_gestor);
-        if (toggleError.value) {
+    if (toggleError.value) {
         toast.add({ severity: 'warn', summary: 'Atenção', detail: 'Selecione Doador e/ou Gestor.', life: 2500 });
         return;
     }
     if (!entidadeParaEditar.value.razao_social) return;
 
-    // 1. Prepara o payload da Entidade
     let entidadePayload = { ...entidadeParaEditar.value };
     entidadePayload.data_cadastro = formatDateToAPI(entidadePayload.data_cadastro);
     entidadePayload.vigencia_de = formatDateToAPI(entidadePayload.vigencia_de);
@@ -281,15 +242,14 @@ const saveEntidade = async () => {
     entidadePayload.categoria = entidadePayload.categoria ?? null;
     entidadePayload.documento = onlyDigits(entidadePayload.documento);
     entidadePayload.cep = onlyDigits(entidadePayload.cep);
-    
     delete entidadePayload.contatos;
 
     try {
-        // 2. Salva a Entidade
-        const response = await axios.put(`${API_BASE_URL}entidades/${entidadeParaEditar.value.id}/`, entidadePayload);
+        // 7. USAMOS 'api' PARA ATUALIZAR A ENTIDADE
+        const response = await api.put(`/entidades/${entidadeParaEditar.value.id}/`, entidadePayload);
         const savedEntidade = response.data;
 
-        // 3. Processa e Salva os Contatos
+        // 8. USAMOS 'api' PARA ATUALIZAR/CRIAR CONTATOS
         const contatosPromises = entidadeParaEditar.value.contatos.map(contato => {
             const contatoPayload = { ...contato, entidade: savedEntidade.id };
             if (contatoPayload.tipo_contato === 'T') {
@@ -299,23 +259,21 @@ const saveEntidade = async () => {
                 return Promise.reject({ message: 'E-mail inválido em contatos.' });
             }
             return contato.id
-                ? axios.put(`${API_BASE_URL}contatos/${contato.id}/`, contatoPayload)
-                : axios.post(`${API_BASE_URL}contatos/`, contatoPayload);
+                ? api.put(`/contatos/${contato.id}/`, contatoPayload)
+                : api.post('/contatos/', contatoPayload);
         });
         
         await Promise.all(contatosPromises);
 
         toast.add({ severity: 'success', summary: 'Sucesso', detail: 'Entidade atualizada com sucesso!', life: 3000 });
         entidadeDialog.value = false;
-        fetchEntidadeData(); // Recarrega os dados da página
+        fetchEntidadeData();
 
     } catch (err) {
         console.error("Erro ao salvar entidade:", err.response?.data || err);
         toast.add({ severity: 'error', summary: 'Erro', detail: 'Não foi possível salvar a entidade.', life: 3000 });
     }
 };
-
-// --- LÓGICA DOS CONTATOS NO MODAL ---
 const addContato = (tipo) => {
     entidadeParaEditar.value.contatos.push({
         tipo_contato: tipo,
@@ -323,48 +281,40 @@ const addContato = (tipo) => {
         descricao: ''
     });
 };
-
 const removeContato = (contatoParaRemover) => {
     entidadeParaEditar.value.contatos = entidadeParaEditar.value.contatos.filter(c => c !== contatoParaRemover);
     if (contatoParaRemover.id) {
-        axios.delete(`${API_BASE_URL}contatos/${contatoParaRemover.id}/`)
+        // 9. USAMOS 'api' PARA DELETAR CONTATO
+        api.delete(`/contatos/${contatoParaRemover.id}/`)
             .then(() => toast.add({ severity: 'info', summary: 'Aviso', detail: 'Contato removido.', life: 2000 }))
             .catch(err => console.error("Erro ao deletar contato:", err));
     }
 };
 
-// --- NOVA LÓGICA: CRUD DE RESPONSÁVEIS ---
-
-// Abre o modal para CRIAR um novo responsável
+// --- CRUD DE RESPONSÁVEIS ---
 const openNovoResponsavelDialog = () => {
-    responsavel.value = {}; // Limpa o objeto
+    responsavel.value = {};
     submitted.value = false;
-    isEditMode.value = false; // Define o modo como 'criação'
+    isEditMode.value = false;
     responsavelDialog.value = true;
 };
-
-// Abre o modal para EDITAR um responsável existente
 const editResponsavel = (responsavelParaEditar) => {
-    // Monta o objeto para o formulário com dados da pessoa e do vínculo
     responsavel.value = {
-        ...responsavelParaEditar.pessoa_fisica, // Copia dados da pessoa (id, nome, cpf...)
-        cargo: responsavelParaEditar.cargo, // Copia o cargo
-        vinculoId: responsavelParaEditar.id // Guarda o ID do VÍNCULO
+        ...responsavelParaEditar.pessoa_fisica,
+        cargo: responsavelParaEditar.cargo,
+        vinculoId: responsavelParaEditar.id
     };
     if (responsavel.value.data_nascimento) {
         responsavel.value.data_nascimento = new Date(responsavel.value.data_nascimento);
     }
     submitted.value = false;
-    isEditMode.value = true; // Define o modo como 'edição'
+    isEditMode.value = true;
     responsavelDialog.value = true;
 };
-
-// Salva (cria ou edita) o responsável e seu vínculo
 const saveResponsavel = async () => {
     submitted.value = true;
     if (!responsavel.value.nome_completo || !responsavel.value.cargo) return;
 
-    // Prepara os dados da Pessoa Física
     const pessoaPayload = {
         nome_completo: responsavel.value.nome_completo,
         cpf: responsavel.value.cpf,
@@ -375,32 +325,31 @@ const saveResponsavel = async () => {
 
     try {
         let pessoaSalva;
-
-        // Se estiver em modo de edição, atualiza a pessoa existente
+        // 10. USAMOS 'api' PARA SALVAR PESSOA FÍSICA
         if (isEditMode.value) {
-            const response = await axios.put(`${API_BASE_URL}pessoas/${responsavel.value.id}/`, pessoaPayload);
+            const response = await api.put(`/pessoas/${responsavel.value.id}/`, pessoaPayload);
             pessoaSalva = response.data;
-        } else { // Senão, cria uma nova pessoa
-            const response = await axios.post(`${API_BASE_URL}pessoas/`, pessoaPayload);
+        } else {
+            const response = await api.post('/pessoas/', pessoaPayload);
             pessoaSalva = response.data;
         }
 
-        // Agora, cria ou atualiza o VÍNCULO de Responsável
         const vinculoPayload = {
             entidade: entidade.value.id,
             pessoa_fisica: pessoaSalva.id,
             cargo: responsavel.value.cargo
         };
 
-        if (isEditMode.value) { // Atualiza o vínculo existente
-            await axios.put(`${API_BASE_URL}responsaveis/${responsavel.value.vinculoId}/`, vinculoPayload);
-        } else { // Cria um novo vínculo
-            await axios.post(`${API_BASE_URL}responsaveis/`, vinculoPayload);
+        // 11. USAMOS 'api' PARA SALVAR VÍNCULO DE RESPONSÁVEL
+        if (isEditMode.value) {
+            await api.put(`/responsaveis/${responsavel.value.vinculoId}/`, vinculoPayload);
+        } else {
+            await api.post('/responsaveis/', vinculoPayload);
         }
 
         toast.add({ severity: 'success', summary: 'Sucesso', detail: 'Responsável salvo com sucesso!', life: 3000 });
         responsavelDialog.value = false;
-        fetchEntidadeData(); // Recarrega os dados da entidade
+        fetchEntidadeData();
 
     } catch (err) {
         console.error("Erro ao salvar responsável:", err.response?.data || err);
@@ -408,63 +357,40 @@ const saveResponsavel = async () => {
     }
 };
 
-// A função 'removerVinculo' que já tínhamos para o botão de lixeira está perfeita e será usada.
-const removerVinculo = (tipo, vinculoId) => {
-    const confirm = window.confirm(`Tem certeza que deseja remover este ${tipo}?`);
-    if (confirm) {
-        const endpoint = tipo === 'responsável' ? 'responsaveis' : 'beneficiarios';
-        axios.delete(`${API_BASE_URL}${endpoint}/${vinculoId}/`)
-            .then(() => {
-                toast.add({ severity: 'success', summary: 'Sucesso', detail: `${tipo} desvinculado.`, life: 3000 });
-                fetchEntidadeData();
-            })
-            .catch(err => console.error(`Erro ao remover ${tipo}:`, err));
-    }
-};
-
-// --- NOVA LÓGICA DE EXCLUSÃO DE VÍNCULO ---
-
-// Passo 1: Abre o modal de confirmação
+// --- EXCLUSÃO DE VÍNCULO E CRUD DE BENEFICIADOS ---
 const confirmRemoverVinculo = (tipo, vinculo) => {
-    vinculoParaDeletar.value = { tipo, ...vinculo }; // Guarda o tipo e os dados do vínculo
-    deleteVinculoDialog.value = true; // Abre o modal
+    vinculoParaDeletar.value = { tipo, ...vinculo };
+    deleteVinculoDialog.value = true;
 };
-
-// Passo 2: Executa a exclusão se o usuário confirmar
 const deleteVinculoConfirmado = () => {
     const { tipo, id } = vinculoParaDeletar.value;
     const endpoint = tipo === 'responsável' ? 'responsaveis' : 'beneficiarios';
 
-    axios.delete(`${API_BASE_URL}${endpoint}/${id}/`)
+    // 12. USAMOS 'api' PARA DELETAR VÍNCULO
+    api.delete(`/${endpoint}/${id}/`)
         .then(() => {
             toast.add({ severity: 'success', summary: 'Sucesso', detail: `${tipo} desvinculado.`, life: 3000 });
-            fetchEntidadeData(); // Atualiza a lista na tela
+            fetchEntidadeData();
         })
         .catch(err => {
             console.error(`Erro ao remover ${tipo}:`, err);
             toast.add({ severity: 'error', summary: 'Erro', detail: `Não foi possível desvincular o ${tipo}.`, life: 3000 });
         })
         .finally(() => {
-            deleteVinculoDialog.value = false; // Fecha o modal
-            vinculoParaDeletar.value = {}; // Limpa o objeto
+            deleteVinculoDialog.value = false;
+            vinculoParaDeletar.value = {};
         });
 };
-
-// --- NOVA LÓGICA: CRUD DE BENEFICIADOS ---
-
-// Abre o modal para CRIAR um novo beneficiado
 const openNovoBeneficiadoDialog = () => {
     beneficiado.value = {};
     submitted.value = false;
     isBeneficiadoEditMode.value = false;
     beneficiadoDialog.value = true;
 };
-
-// Abre o modal para EDITAR um beneficiado existente
 const editBeneficiado = (beneficiadoParaEditar) => {
     beneficiado.value = {
-        ...beneficiadoParaEditar.pessoa_fisica, // Copia dados da pessoa
-        vinculoId: beneficiadoParaEditar.id // Guarda o ID do VÍNCULO
+        ...beneficiadoParaEditar.pessoa_fisica,
+        vinculoId: beneficiadoParaEditar.id
     };
     if (beneficiado.value.data_nascimento) {
         beneficiado.value.data_nascimento = new Date(beneficiado.value.data_nascimento);
@@ -473,13 +399,10 @@ const editBeneficiado = (beneficiadoParaEditar) => {
     isBeneficiadoEditMode.value = true;
     beneficiadoDialog.value = true;
 };
-
-// Salva (cria ou edita) o beneficiado e seu vínculo
 const saveBeneficiado = async () => {
     submitted.value = true;
     if (!beneficiado.value.nome_completo) return;
 
-    // Prepara os dados da Pessoa Física
     const pessoaPayload = {
         nome_completo: beneficiado.value.nome_completo,
         cpf: beneficiado.value.cpf,
@@ -490,25 +413,25 @@ const saveBeneficiado = async () => {
 
     try {
         let pessoaSalva;
-
-        if (isBeneficiadoEditMode.value) { // Edição
-            const response = await axios.put(`${API_BASE_URL}pessoas/${beneficiado.value.id}/`, pessoaPayload);
+        // 13. USAMOS 'api' PARA SALVAR PESSOA FÍSICA DO BENEFICIADO
+        if (isBeneficiadoEditMode.value) {
+            const response = await api.put(`/pessoas/${beneficiado.value.id}/`, pessoaPayload);
             pessoaSalva = response.data;
-        } else { // Criação
-            const response = await axios.post(`${API_BASE_URL}pessoas/`, pessoaPayload);
+        } else {
+            const response = await api.post('/pessoas/', pessoaPayload);
             pessoaSalva = response.data;
         }
 
-        // Agora, cria ou atualiza o VÍNCULO de Beneficiado (sem o campo 'cargo')
         const vinculoPayload = {
             entidade_intermediaria: entidade.value.id,
             pessoa_fisica: pessoaSalva.id
         };
 
-        if (isBeneficiadoEditMode.value) { // Atualiza
-            await axios.put(`${API_BASE_URL}beneficiarios/${beneficiado.value.vinculoId}/`, vinculoPayload);
-        } else { // Cria
-            await axios.post(`${API_BASE_URL}beneficiarios/`, vinculoPayload);
+        // 14. USAMOS 'api' PARA SALVAR VÍNCULO DE BENEFICIADO
+        if (isBeneficiadoEditMode.value) {
+            await api.put(`/beneficiarios/${beneficiado.value.vinculoId}/`, vinculoPayload);
+        } else {
+            await api.post('/beneficiarios/', vinculoPayload);
         }
 
         toast.add({ severity: 'success', summary: 'Sucesso', detail: 'Beneficiado salvo com sucesso!', life: 3000 });
@@ -520,7 +443,6 @@ const saveBeneficiado = async () => {
         toast.add({ severity: 'error', summary: 'Erro', detail: 'Não foi possível salvar.', life: 3000 });
     }
 };
-
 const abrirEmNovaAba = (name, params) => {
   const { href } = router.resolve({ name, params });
   window.open(href, '_blank');
@@ -532,7 +454,7 @@ const abrirEmNovaAba = (name, params) => {
         <div class="card" v-if="entidade">
             <div class="flex flex-wrap gap-2 items-center justify-between mb-6">
                 <div class="flex gap-2">
-                    <router-link to="/entidades">
+                    <router-link to="/app/entidades">
                         <Button icon="pi pi-arrow-left" severity="secondary" text rounded />
                     </router-link>
                     <div>

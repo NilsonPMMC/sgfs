@@ -1,98 +1,103 @@
 <script setup>
+// 1. IMPORTAMOS A NOSSA INSTÂNCIA 'api'
+import api from '@/services/api';
 import { ref, onMounted } from 'vue';
-import axios from 'axios';
+import { useRouter } from 'vue-router';
 import { useToast } from 'primevue/usetoast';
 import { FilterMatchMode } from '@primevue/core/api';
 
+const router = useRouter();
 const toast = useToast();
-const API_BASE_URL = 'http://127.0.0.1:8005/api/';
+
+// 2. REMOVEMOS A URL FIXA
+// const API_BASE_URL = 'http://127.0.0.1:8005/api/';
 
 const dt = ref();
 const saidas = ref([]);
 const loading = ref(true);
-
-// Dialog de exclusão
 const deleteSaidaDialog = ref(false);
 const saidaSelecionada = ref(null);
-
 const filters = ref({
-  global: { value: null, matchMode: FilterMatchMode.CONTAINS }
+    global: { value: null, matchMode: FilterMatchMode.CONTAINS }
 });
 
 const exportCSV = () => dt.value.exportCSV();
 
 const fetchData = async () => {
-  loading.value = true;
-  let all = [];
-  let nextUrl = `${API_BASE_URL}doacoes-realizadas/`;
-  try {
-    while (nextUrl) {
-      const r = await axios.get(nextUrl);
-      const page = Array.isArray(r.data?.results) ? r.data.results : r.data;
-      all = all.concat(page);
-      nextUrl = r.data?.next || null;
+    loading.value = true;
+    let all = [];
+    // 3. A PRIMEIRA CHAMADA É RELATIVA
+    let nextUrl = '/doacoes-realizadas/';
+    try {
+        while (nextUrl) {
+            // USAMOS 'api.get'
+            const r = await api.get(nextUrl);
+            const page = Array.isArray(r.data?.results) ? r.data.results : r.data;
+            all = all.concat(page);
+            // CORREÇÃO: Usamos a URL completa que a API nos dá para as próximas páginas
+            nextUrl = r.data?.next || null;
+        }
+        saidas.value = all;
+    } catch (e) {
+        console.error(e);
+        toast.add({ severity: 'error', summary: 'Erro', detail: 'Falha ao carregar saídas.', life: 3000 });
+    } finally {
+        loading.value = false;
     }
-    saidas.value = all;
-  } catch (e) {
-    console.error(e);
-    toast.add({ severity: 'error', summary: 'Erro', detail: 'Falha ao carregar saídas.', life: 3000 });
-  } finally {
-    loading.value = false;
-  }
 };
 
 onMounted(fetchData);
 
-// Label amigável da entidade gestora
+// --- FUNÇÕES DE UI E EXCLUSÃO ---
 const getEntidadeGestoraLabel = (row) =>
-  row?.entidade_gestora_nome ||
-  row?.entidade_gestora_obj?.nome_fantasia ||
-  row?.entidade_gestora_obj?.razao_social ||
-  (row?.entidade_gestora ? `#${row.entidade_gestora}` : '—');
+    row?.entidade_gestora_nome ||
+    row?.entidade_gestora_obj?.nome_fantasia ||
+    row?.entidade_gestora_obj?.razao_social ||
+    (row?.entidade_gestora ? `#${row.entidade_gestora}` : '—');
 
-// Abrir/fechar dialog
 const confirmarExclusao = (row) => {
-  saidaSelecionada.value = row;
-  deleteSaidaDialog.value = true;
+    saidaSelecionada.value = row;
+    deleteSaidaDialog.value = true;
 };
 
 const cancelarExclusao = () => {
-  deleteSaidaDialog.value = false;
-  saidaSelecionada.value = null;
-};
-
-// Excluir (endpoint corrigido)
-const excluirSaida = async () => {
-  if (!saidaSelecionada.value?.id) return;
-  try {
-    await axios.delete(`${API_BASE_URL}doacoes-realizadas/${saidaSelecionada.value.id}/`);
-    toast.add({
-      severity: 'success',
-      summary: 'Excluído',
-      detail: 'Saída removida e estoque revertido.',
-      life: 3000
-    });
     deleteSaidaDialog.value = false;
     saidaSelecionada.value = null;
-    await fetchData();
-  } catch (err) {
-    console.error('Erro ao excluir:', err?.response?.data || err);
-    toast.add({
-      severity: 'error',
-      summary: 'Erro',
-      detail: 'Não foi possível excluir a saída.',
-      life: 4000
-    });
-  }
+};
+
+const excluirSaida = async () => {
+    if (!saidaSelecionada.value?.id) return;
+    try {
+        // 4. USAMOS 'api.delete' COM CAMINHO RELATIVO
+        await api.delete(`/doacoes-realizadas/${saidaSelecionada.value.id}/`);
+        toast.add({
+            severity: 'success',
+            summary: 'Excluído',
+            detail: 'Saída removida e estoque revertido.',
+            life: 3000
+        });
+        deleteSaidaDialog.value = false;
+        saidaSelecionada.value = null;
+        await fetchData();
+    } catch (err) {
+        console.error('Erro ao excluir:', err?.response?.data || err);
+        toast.add({
+            severity: 'error',
+            summary: 'Erro',
+            detail: 'Não foi possível excluir a saída.',
+            life: 4000
+        });
+    }
 };
 
 const editar = (row) => {
-  window.location.href = `/doacoes/saida/${row.id}`;
+    // 5. NAVEGAÇÃO MELHORADA USANDO O ROUTER
+    router.push({ name: 'EditarSaidaDoacao', params: { id: row.id } });
 };
 
 const abrirRelatorioSaida = (row) => {
-  if (!row?.id) return;
-  window.open(`/relatorios/saida/${row.id}`, '_blank');
+    if (!row?.id) return;
+    window.open(`/relatorios/saida/${row.id}`, '_blank');
 };
 </script>
 

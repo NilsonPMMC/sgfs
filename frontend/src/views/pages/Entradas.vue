@@ -1,98 +1,103 @@
 <script setup>
+// 1. IMPORTAMOS A NOSSA INSTÂNCIA 'api'
+import api from '@/services/api';
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import axios from 'axios';
 import { useToast } from 'primevue/usetoast';
 import { FilterMatchMode } from '@primevue/core/api';
 
 const router = useRouter();
 const toast = useToast();
-const API_BASE_URL = 'http://127.0.0.1:8005/api/';
+
+// 2. REMOVEMOS A URL FIXA
+// const API_BASE_URL = 'http://127.0.0.1:8005/api/';
 
 const dt = ref();
 const entradas = ref([]);
 const loading = ref(true);
-const registros = ref([]);
 const deleteEntradaDialog = ref(false);
 const entradaSelecionada = ref(null);
-
 const filters = ref({
-  global: { value: null, matchMode: FilterMatchMode.CONTAINS }
+    global: { value: null, matchMode: FilterMatchMode.CONTAINS }
 });
 
 const exportCSV = () => dt.value.exportCSV();
 
 const fetchData = async () => {
-  loading.value = true;
-  let all = [];
-  let nextUrl = `${API_BASE_URL}doacoes-recebidas/`;
-  try {
-    while (nextUrl) {
-      const r = await axios.get(nextUrl);
-      const page = Array.isArray(r.data?.results) ? r.data.results : r.data;
-      all = all.concat(page);
-      nextUrl = r.data?.next || null;
+    loading.value = true;
+    let all = [];
+    // 3. A PRIMEIRA CHAMADA É RELATIVA
+    let nextUrl = '/doacoes-recebidas/';
+    try {
+        while (nextUrl) {
+            // USAMOS 'api.get'
+            const r = await api.get(nextUrl);
+            const page = Array.isArray(r.data?.results) ? r.data.results : r.data;
+            all = all.concat(page);
+            // CORREÇÃO: Usamos a URL completa que a API nos dá para as próximas páginas
+            nextUrl = r.data?.next || null;
+        }
+        entradas.value = all;
+    } catch (e) {
+        console.error(e);
+        toast.add({ severity: 'error', summary: 'Erro', detail: 'Falha ao carregar entradas.', life: 3000 });
+    } finally {
+        loading.value = false;
     }
-    entradas.value = all;
-  } catch (e) {
-    console.error(e);
-    toast.add({ severity: 'error', summary: 'Erro', detail: 'Falha ao carregar entradas.', life: 3000 });
-  } finally {
-    loading.value = false;
-  }
 };
 
 const confirmDeleteEntrada = (entrada) => {
-  entradaSelecionada.value = entrada;
-  deleteEntradaDialog.value = true;
+    entradaSelecionada.value = entrada;
+    deleteEntradaDialog.value = true;
 };
 
+// --- FUNÇÕES AUXILIARES (sem alteração) ---
 const getDoadorLabel = (e) =>
-  e?.doador_nome || e?.doador?.nome || e?.object_name || 'doador';
+    e?.doador_nome || e?.doador?.nome || e?.object_name || 'doador';
 
 const getPrimeiroItemLabel = (e) => {
-  const arr = Array.isArray(e?.itens_doados) ? e.itens_doados : [];
-  const it = arr[0] || null;
-  const nome = it?.item?.nome || it?.item_nome || null;
-  const qtd = it?.quantidade;
-  return nome ? `${qtd} x ${nome}` : '';
+    const arr = Array.isArray(e?.itens_doados) ? e.itens_doados : [];
+    const it = arr[0] || null;
+    const nome = it?.item?.nome || it?.item_nome || null;
+    const qtd = it?.quantidade;
+    return nome ? `${qtd} x ${nome}` : '';
 };
 
 const deleteEntrada = async () => {
-  if (!entradaSelecionada.value) return;
+    if (!entradaSelecionada.value) return;
 
-  try {
-    await axios.delete(`${API_BASE_URL}doacoes-recebidas/${entradaSelecionada.value.id}/`);
-    toast.add({
-      severity: 'success',
-      summary: 'Excluído',
-      detail: 'Entrada removida e estoque revertido.',
-      life: 3000
-    });
-    deleteEntradaDialog.value = false;
-    await fetchData();
-  } catch (err) {
-    console.error('Erro ao excluir:', err?.response?.data || err);
-    toast.add({
-      severity: 'error',
-      summary: 'Erro',
-      detail: 'Não foi possível excluir a entrada.',
-      life: 4000
-    });
-  }
+    try {
+        // 4. USAMOS 'api.delete' COM CAMINHO RELATIVO
+        await api.delete(`/doacoes-recebidas/${entradaSelecionada.value.id}/`);
+        toast.add({
+            severity: 'success',
+            summary: 'Excluído',
+            detail: 'Entrada removida e estoque revertido.',
+            life: 3000
+        });
+        deleteEntradaDialog.value = false;
+        await fetchData();
+    } catch (err) {
+        console.error('Erro ao excluir:', err?.response?.data || err);
+        toast.add({
+            severity: 'error',
+            summary: 'Erro',
+            detail: 'Não foi possível excluir a entrada.',
+            life: 4000
+        });
+    }
 };
 
 onMounted(fetchData);
 
 const editar = (row) => {
-  // abre o editor com o id
-  window.location.href = `/doacoes/entrada/${row.id}`;
+    // Esta navegação pode ser melhorada para usar o router do Vue
+    router.push({ name: 'EditarEntradaDoacao', params: { id: row.id } });
 };
 
-
 const abrirEmNovaAba = (name, params) => {
-  const { href } = router.resolve({ name, params });
-  window.open(href, '_blank');
+    const { href } = router.resolve({ name, params });
+    window.open(href, '_blank');
 };
 </script>
 

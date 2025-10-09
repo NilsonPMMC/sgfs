@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
-import axios from 'axios';
+// 1. IMPORTAMOS A NOSSA INSTÂNCIA 'api'
+import api from '@/services/api';
 import OverlayPanel from 'primevue/overlaypanel';
 import OverlayBadge from 'primevue/overlaybadge';
 
@@ -9,44 +10,48 @@ const loading = ref(false);
 const alertas = ref([]);
 const unreadCount = ref(0);
 
-const API = 'http://127.0.0.1:8005/api/';
+// 2. REMOVEMOS A URL FIXA
+// const API = 'http://127.0.0.1:8005/api/';
 
 const fetchAlertas = async () => {
-  loading.value = true;
-  try {
-    // tenta gerar pendentes (ignora erros – idempotente)
-    await axios.post(`${API}alertas/gerar_pendentes/`).catch(() => {});
-    // pega todos e filtra no cliente (independe de ?lido=false funcionar)
-    const r = await axios.get(`${API}alertas/`);
-    const lista = Array.isArray(r.data?.results) ? r.data.results : (Array.isArray(r.data) ? r.data : []);
-    const naoLidos = lista.filter(a => !a.lido);
-    alertas.value = naoLidos;
-    unreadCount.value = naoLidos.length;
-  } finally {
-    loading.value = false;
-  }
+    loading.value = true;
+    try {
+        // 3. USAMOS 'api.post' COM CAMINHO RELATIVO
+        await api.post('/alertas/gerar_pendentes/').catch(() => {});
+        
+        // 4. USAMOS 'api.get' COM CAMINHO RELATIVO
+        const r = await api.get('/alertas/');
+        const lista = Array.isArray(r.data?.results) ? r.data.results : (Array.isArray(r.data) ? r.data : []);
+        const naoLidos = lista.filter(a => !a.lido);
+        alertas.value = naoLidos;
+        unreadCount.value = naoLidos.length;
+    } finally {
+        loading.value = false;
+    }
 };
 
 const badgeValue = computed(() =>
-  unreadCount.value > 0 ? String(unreadCount.value) : undefined
+    unreadCount.value > 0 ? String(unreadCount.value) : undefined
 );
 
 const toggle = (e) => op.value?.toggle(e);
 
 const marcarComoLido = async (a) => {
-  try {
-    await axios.patch(`${API}alertas/${a.id}/`, { lido: true });
-  } catch {}
-  alertas.value = alertas.value.filter(x => x.id !== a.id);
-  unreadCount.value = alertas.value.length;
+    try {
+        // 5. USAMOS 'api.patch' COM CAMINHO RELATIVO
+        await api.patch(`/alertas/${a.id}/`, { lido: true });
+    } catch {}
+    alertas.value = alertas.value.filter(x => x.id !== a.id);
+    unreadCount.value = alertas.value.length;
 };
 
 const marcarTodos = async () => {
-  try {
-    await axios.post(`${API}alertas/marcar_todos_lidos/`);
-  } catch {}
-  alertas.value = [];
-  unreadCount.value = 0;
+    try {
+        // 6. USAMOS 'api.post' COM CAMINHO RELATIVO
+        await api.post('/alertas/marcar_todos_lidos/');
+    } catch {}
+    alertas.value = [];
+    unreadCount.value = 0;
 };
 
 onMounted(fetchAlertas);

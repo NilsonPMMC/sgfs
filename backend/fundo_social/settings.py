@@ -27,7 +27,7 @@ SECRET_KEY = 'django-insecure-9e0a)$hbq!r3*0$k!(3gwlh*i*v^#wjz2&9um-fxf)ji)w@xkw
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ['fundosocial.mogidascruzes.sp.gov.br', '192.168.10.50', '127.0.0.1', 'localhost']
+ALLOWED_HOSTS = ['fundosocial.mogidascruzes.sp.gov.br']
 
 CSRF_TRUSTED_ORIGINS = ['https://fundosocial.mogidascruzes.sp.gov.br']
 
@@ -143,10 +143,10 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
     # "http://fundosocial.mogidascruzes.sp.gov.br",
 #]
 
-CORS_ALLOW_ALL_ORIGINS = False
-CORS_ALLOWED_ORIGINS = [
-    "https://fundosocial.mogidascruzes.sp.gov.br",
-]
+CORS_ALLOW_ALL_ORIGINS = True
+#CORS_ALLOWED_ORIGINS = [
+#    "https://fundosocial.mogidascruzes.sp.gov.br",
+#]
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -254,3 +254,5 @@ LOGGING = {
         },
     },
 }
+
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')

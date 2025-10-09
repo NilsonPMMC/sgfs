@@ -1,12 +1,14 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
-import axios from 'axios';
+// 1. IMPORTAMOS A NOSSA INSTÂNCIA 'api'
+import api from '@/services/api';
 import ReportLayout from '@/views/reports/ReportLayout.vue';
 import Divider from 'primevue/divider';
 
 const route = useRoute();
-const API = 'http://127.0.0.1:8005/api/';
+// 2. REMOVEMOS A URL FIXA
+// const API = 'http://127.0.0.1:8005/api/';
 
 const ent = ref(null);
 const entradas = ref([]);
@@ -14,30 +16,30 @@ const saidas = ref([]);
 const loading = ref(true);
 
 const fmt = (dmy) => {
-  if (!dmy) return '';
-  const [y,m,d] = dmy.split('-');
-  return `${d}/${m}/${y}`;
+    if (!dmy) return '';
+    const [y, m, d] = dmy.split('-');
+    return `${d}/${m}/${y}`;
 };
 
 const fetchAll = async () => {
-  loading.value = true;
-  const id = route.params.id;
+    loading.value = true;
+    const id = route.params.id;
 
-  // entidade
-  const e = await axios.get(`${API}entidades/${id}/`);
-  ent.value = e.data;
+    try {
+        // 3. USAMOS 'api.get' COM CAMINHOS RELATIVOS
+        // entidade
+        const e = await api.get(`/entidades/${id}/`);
+        ent.value = e.data;
 
-  // histórico (simples): doações recebidas pelo gestor = entradas? (opcional)
-  // e doações realizadas para essa entidade (saídas)
-  // Ajuste os filtros conforme seu backend expõe (ex.: ?entidade_gestora=id)
-  const sr = await axios.get(`${API}doacoes-realizadas/?entidade_gestora=${id}`);
-  saidas.value = sr.data?.results ?? sr.data ?? [];
+        // doações realizadas para essa entidade (saídas)
+        const sr = await api.get(`/doacoes-realizadas/?entidade_gestora=${id}`);
+        saidas.value = sr.data?.results ?? sr.data ?? [];
 
-  // Se quiser entradas relacionadas ao gestor (caso a própria entidade seja doadora, adapte)
-  // const er = await axios.get(`${API}doacoes-recebidas/?object_id=${id}`);
-  // entradas.value = er.data?.results ?? er.data ?? [];
-
-  loading.value = false;
+    } catch (error) {
+        console.error("Erro ao buscar dados do relatório:", error);
+    } finally {
+        loading.value = false;
+    }
 };
 
 const printNow = () => window.print();

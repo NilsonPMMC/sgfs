@@ -1,43 +1,48 @@
 <script setup>
+// 1. IMPORTAMOS APENAS A NOSSA INSTÂNCIA 'api'
+import api from '@/services/api';
 import { useAuthStore } from '@/store/auth';
 import { ref, onMounted } from 'vue';
 import { useToast } from 'primevue/usetoast';
-import axios from 'axios';
 import { FilterMatchMode } from '@primevue/core/api';
 
+// --- ESTADO DO COMPONENTE ---
 const authStore = useAuthStore();
 const toast = useToast();
 const kits = ref([]);
 const kitDialog = ref(false);
 const kit = ref({ itens_do_kit: [] });
 const submitted = ref(false);
-const itensEncontrados = ref([]); // Para a busca de itens
-const API_URL = 'http://127.0.0.1:8005/api/kits/';
-
+const itensEncontrados = ref([]);
 const deleteKitDialog = ref(false);
 const kitParaDeletar = ref({});
-
 const dt = ref();
 const filters = ref({
     global: { value: null, matchMode: FilterMatchMode.CONTAINS }
 });
+
+// 2. REMOVEMOS A URL FIXA
+// const API_URL = 'http://127.0.0.1:8005/api/kits/';
+
+// --- FUNÇÕES AUXILIARES E DE BUSCA ---
 const exportCSV = () => dt.value.exportCSV();
 
 const getStockClass = (item) => {
     const estoque = item.estoque_atual || 0;
-    if (estoque === 0) return 'text-red-500'; // Vermelho para "sem estoque"
-    if (estoque > 0 && estoque <= 10) return 'text-orange-500'; // Laranja para "estoque baixo"
-    return 'text-green-500'; // Verde para "em estoque"
+    if (estoque === 0) return 'text-red-500';
+    if (estoque > 0 && estoque <= 10) return 'text-orange-500';
+    return 'text-green-500';
 };
 
 const fetchData = async () => {
     let allKits = [];
-    let nextUrl = API_URL;
+    let nextUrl = '/kits/'; // A primeira chamada é relativa
 
     while (nextUrl) {
         try {
-            const response = await axios.get(nextUrl);
-            allKits = allKits.concat(response.data.results); // Pega os dados de dentro de 'results'
+            const response = await api.get(nextUrl);
+            allKits = allKits.concat(response.data.results);
+            // CORREÇÃO: Usamos a URL completa que a API nos dá para as próximas páginas
             nextUrl = response.data.next;
         } catch (error) {
             console.error("Erro ao buscar kits:", error);
@@ -46,8 +51,10 @@ const fetchData = async () => {
     }
     kits.value = allKits;
 };
+
 onMounted(fetchData);
 
+// --- LÓGICA DO CRUD DE KITS ---
 const openNew = () => {
     kit.value = { itens_do_kit: [{ item: null, quantidade: 1 }] };
     submitted.value = false;
@@ -55,13 +62,10 @@ const openNew = () => {
 };
 
 const editKit = (kitParaEditar) => {
-    // A API retorna o item completo, mas para salvar precisamos só do item_id.
-    // O backend espera { "item_id": X, "quantidade": Y }
-    // Vamos garantir que nosso objeto de edição esteja nesse formato.
     kit.value = {
         ...kitParaEditar,
         itens_do_kit: kitParaEditar.itens_do_kit.map(ik => ({
-            item: ik.item, // Mantemos o objeto completo para exibição no AutoComplete
+            item: ik.item,
             quantidade: ik.quantidade,
         }))
     };
@@ -75,14 +79,15 @@ const saveKit = () => {
     const payload = {
         ...kit.value,
         itens_do_kit: kit.value.itens_do_kit.map(ik => ({
-            item_id: ik.item.id, // Enviamos apenas o ID do item
+            item_id: ik.item.id,
             quantidade: ik.quantidade,
         }))
     };
 
+    // 4. USAMOS 'api.put' OU 'api.post' COM CAMINHOS RELATIVOS
     const request = kit.value.id
-        ? axios.put(`${API_URL}${kit.value.id}/`, payload)
-        : axios.post(API_URL, payload);
+        ? api.put(`/kits/${kit.value.id}/`, payload)
+        : api.post('/kits/', payload);
 
     request.then(() => {
         toast.add({ severity: 'success', summary: 'Sucesso', detail: `Kit salvo com sucesso!`, life: 3000 });
@@ -94,17 +99,18 @@ const saveKit = () => {
     });
 };
 
-const confirmDeleteKit = (kitParaDeletar) => {
-    kit.value = kitParaDeletar; // Reutilizando a variável 'kit' para a mensagem
+const confirmDeleteKit = (kitParaConfirmar) => {
+    kit.value = kitParaConfirmar;
     deleteKitDialog.value = true;
 };
 
 const deleteKit = () => {
-    axios.delete(`${API_URL}${kit.value.id}/`)
+    // 5. USAMOS 'api.delete' COM CAMINHO RELATIVO
+    api.delete(`/kits/${kit.value.id}/`)
         .then(() => {
             toast.add({ severity: 'success', summary: 'Sucesso', detail: 'Kit deletado com sucesso!', life: 3000 });
             deleteKitDialog.value = false;
-            fetchData(); // Atualiza a lista de kits
+            fetchData();
         })
         .catch(err => {
             console.error("Erro ao deletar kit:", err.response?.data);
@@ -112,8 +118,10 @@ const deleteKit = () => {
         });
 };
 
+// --- FUNÇÕES DO FORMULÁRIO DO KIT ---
 const searchItem = (event) => {
-    axios.get(`http://127.0.0.1:8005/api/itens/?search=${event.query}`)
+    // 6. USAMOS 'api.get' PARA BUSCAR ITENS
+    api.get(`/itens/?search=${event.query}`)
         .then(response => (itensEncontrados.value = response.data.results));
 };
 

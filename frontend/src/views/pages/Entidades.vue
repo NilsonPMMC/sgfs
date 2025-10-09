@@ -1,9 +1,11 @@
 <script setup>
+// 1. IMPORTAMOS O 'api' PARA NOSSA API E MANTEMOS O 'axios' PARA APIs EXTERNAS (VIACEP)
+import api from '@/services/api';
+import axios from 'axios'; // Necessário para o ViaCEP
 import { useAuthStore } from '@/store/auth';
 import { ref, onMounted, watch, computed, reactive } from 'vue';
 import { FilterMatchMode } from '@primevue/core/api';
 import { useToast } from 'primevue/usetoast';
-import axios from 'axios';
 import Divider from 'primevue/divider';
 
 // --- CONFIGURAÇÕES E ESTADO ---
@@ -21,93 +23,75 @@ const filters = ref({
 const submitted = ref(false);
 
 const filtros = reactive({
-  classificacao: null,   // string ou id, conforme seu Dropdown
-  categoria: null,       // objeto {id, nome} ou id
-  bairro: null,          // string
+  classificacao: null,
+  categoria: null,
+  bairro: null,
 });
 
-// NOVA VARIÁVEL PARA ARMAZENAR AS CATEGORIAS
-const categorias = ref([]); 
+const categorias = ref([]);
 const entidade = ref({
-    contatos: [] // Inicializa a entidade com uma lista de contatos
+    contatos: []
 });
-const API_BASE_URL = 'http://127.0.0.1:8005/api/';
-const API_URL = 'http://127.0.0.1:8005/api/entidades/';
 
-// --- FUNÇÕES AUXILIARES ---
+// 2. REMOVEMOS AS CONSTANTES DE URL FIXAS
+// const API_BASE_URL = 'http://127.0.0.1:8005/api/';
+// const API_URL = 'http://127.0.0.1:8005/api/entidades/';
+
+// --- FUNÇÕES AUXILIARES --- (Nenhuma alteração aqui)
 const formatDateToAPI = (date) => {
     if (!date) return null;
     const d = new Date(date);
-    // Formata para AAAA-MM-DD
     return d.toISOString().split('T')[0];
 }
-
 const onlyDigits = (s) => (s || '').replace(/\D/g, '');
-
 const isValidEmail = (s) => {
   if (!s) return false;
-  // simples & eficaz; deixa o backend fazer validação final
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s);
 };
-
 const maskDoc = (s) => {
   const d = onlyDigits(s);
   if (!d) return '';
   if (d.length > 11) {
-    // CNPJ: 00.000.000/0000-00
     return d.replace(/^(\d{0,2})(\d{0,3})(\d{0,3})(\d{0,4})(\d{0,2}).*$/, (_, a,b,c,e,f) =>
       [a, b && '.'+b, c && '.'+c, e && '/'+e, f && '-'+f].filter(Boolean).join('')
     );
   }
-  // CPF: 000.000.000-00
   return d.replace(/^(\d{0,3})(\d{0,3})(\d{0,3})(\d{0,2}).*$/, (_, a,b,c,dig) =>
     [a, b && '.'+b, c && '.'+c, dig && '-'+dig].filter(Boolean).join('')
   );
 };
-
 const maskPhone = (s) => {
   const d = onlyDigits(s).slice(0, 11);
   if (!d) return '';
   if (d.length <= 10) {
-    // (99) 9999-9999
     return d.replace(/^(\d{0,2})(\d{0,4})(\d{0,4}).*$/, (_, a,b,c) =>
       [a && `(${a})`, b && ' '+b, c && '-'+c].filter(Boolean).join('')
     );
   }
-  // (99) 99999-9999
   return d.replace(/^(\d{0,2})(\d{0,5})(\d{0,4}).*$/, (_, a,b,c) =>
     [a && `(${a})`, b && ' '+b, c && '-'+c].filter(Boolean).join('')
   );
 };
-
 const onDocInput = (e) => { entidade.value.documento = onlyDigits(e.target.value).slice(0, 14); };
 const onPhoneInput = (contato, e) => { contato.valor = onlyDigits(e.target.value).slice(0, 11); };
-
 const formatDocumento = (v) => maskDoc(v);
-
-// Stats de contatos (para mostrar na lista e no form)
 const contatoStats = computed(() => {
   const t = entidade.value?.contatos?.filter(c => c.tipo_contato === 'T').length || 0;
   const e = entidade.value?.contatos?.filter(c => c.tipo_contato === 'E').length || 0;
   return { telefones: t, emails: e };
 });
-
-// Para feedback “marcar pelo menos um toggle”
 const toggleError = ref(false);
 
 // --- BUSCA INICIAL DE DADOS ---
 const fetchData = async () => {
     let allEntidades = [];
-    // Substitua pela sua URL correta se for diferente
-    let nextUrl = 'http://127.0.0.1:8005/api/entidades/'; 
-
-    // Opcional: ativar o loading se tiver a variável
-    // loading.value = true; 
+    let nextUrl = '/entidades/'; // A primeira chamada é relativa
 
     while (nextUrl) {
         try {
-            const response = await axios.get(nextUrl);
+            const response = await api.get(nextUrl);
             allEntidades = allEntidades.concat(response.data.results);
+            // CORREÇÃO: Usamos a URL completa que a API nos dá para as próximas páginas
             nextUrl = response.data.next;
         } catch (error) {
             console.error("Erro ao buscar uma página de entidades:", error);
@@ -115,20 +99,15 @@ const fetchData = async () => {
             nextUrl = null;
         }
     }
-
     entidades.value = allEntidades;
-    // Opcional: desativar o loading
-    // loading.value = false; 
 };
 
 onMounted(() => {
-    // 1. Continua buscando a lista principal de entidades
-    fetchData(); 
+    fetchData();
 
-    // 2. ADICIONAMOS DE VOLTA a busca pela lista de categorias
-    axios.get(`${API_BASE_URL}categorias/`)
+    // 4. USAMOS 'api' PARA BUSCAR CATEGORIAS
+    api.get('/categorias/')
         .then(response => {
-            // A API de categorias também pode ser paginada, então usamos .results
             categorias.value = response.data.results || response.data;
         })
         .catch(error => {
@@ -136,21 +115,17 @@ onMounted(() => {
         });
 });
 
+// A CHAMADA PARA O VIACEP CONTINUA USANDO 'axios' POR SER EXTERNA
 watch(() => entidade.value.cep, (novoCep) => {
-    // Remove qualquer caractere que não seja número
     const cepLimpo = (novoCep || '').replace(/\D/g, '');
-    
-    // Se o CEP tiver 8 dígitos, faz a busca
     if (cepLimpo.length === 8) {
         axios.get(`https://viacep.com.br/ws/${cepLimpo}/json/`)
             .then(response => {
                 if (response.data.erro) {
                     toast.add({ severity: 'warn', summary: 'Aviso', detail: 'CEP não encontrado.', life: 3000 });
                 } else {
-                    // Preenche os campos com os dados retornados
                     entidade.value.logradouro = response.data.logradouro;
                     entidade.value.bairro = response.data.bairro;
-                    // Futuramente, podemos adicionar cidade e estado também
                 }
             })
             .catch(error => {
@@ -162,21 +137,18 @@ watch(() => entidade.value.cep, (novoCep) => {
 
 // --- FUNÇÕES DE CONTATO ---
 const addContato = (tipo) => {
-    // Adiciona um novo objeto de contato em branco à lista
     entidade.value.contatos.push({
-        tipo_contato: tipo, // 'T' para Telefone, 'E' para Email
+        tipo_contato: tipo,
         valor: '',
         descricao: ''
     });
 };
 
 const removeContato = (contatoParaRemover) => {
-    // Filtra a lista, removendo o contato especificado
     entidade.value.contatos = entidade.value.contatos.filter(c => c !== contatoParaRemover);
-    
-    // Se o contato já existia no banco (tem um ID), precisamos deletá-lo via API
     if (contatoParaRemover.id) {
-        axios.delete(`${API_BASE_URL}contatos/${contatoParaRemover.id}/`)
+        // 5. USAMOS 'api' PARA DELETAR CONTATO
+        api.delete(`/contatos/${contatoParaRemover.id}/`)
             .then(() => {
                 toast.add({ severity: 'info', summary: 'Aviso', detail: 'Contato removido.', life: 2000 });
             })
@@ -184,14 +156,11 @@ const removeContato = (contatoParaRemover) => {
     }
 };
 
-// --- FUNÇÕES DO CRUD ---
+// --- FUNÇÕES DO CRUD --- (O restante das funções do CRUD e lógicas continuam iguais)
 watch(entidade, (novoValor) => {
-    // Se o interruptor "Doador" for ligado E o "Gestor" estiver desligado
     if (novoValor.eh_doador && !novoValor.eh_gestor) {
-        // Procura pela categoria "Doador" na nossa lista de categorias
         const categoriaDoador = categorias.value.find(c => c.nome.toLowerCase() === 'doador');
         if (categoriaDoador) {
-            // Define a categoria automaticamente
             novoValor.categoria = categoriaDoador.id;
         }
     }
@@ -220,7 +189,6 @@ const saveEntidade = async () => {
     toggleError.value = !(entidade.value.eh_doador || entidade.value.eh_gestor);
     if (!entidade.value.razao_social || toggleError.value) return;
 
-    // valida todos os emails dos contatos
     const emailsInvalidos = entidade.value.contatos
         .filter(c => c.tipo_contato === 'E')
         .some(c => !isValidEmail(c.valor));
@@ -229,7 +197,6 @@ const saveEntidade = async () => {
         return;
     }
 
-    // 1. Prepara o payload da Entidade, formatando datas
     let entidadePayload = { ...entidade.value };
     entidadePayload.data_cadastro = formatDateToAPI(entidadePayload.data_cadastro);
     entidadePayload.vigencia_de = formatDateToAPI(entidadePayload.vigencia_de);
@@ -238,33 +205,29 @@ const saveEntidade = async () => {
     entidadePayload.cep = onlyDigits(entidadePayload.cep);
     entidadePayload.categoria = entidadePayload.categoria ?? null;
     
-    // A API de entidade não lida com contatos, então removemos a lista do payload principal
     delete entidadePayload.contatos; 
     
     try {
         let savedEntidade;
-        // 2. Salva a Entidade (Cria ou Atualiza)
+        // 6. USAMOS 'api' PARA SALVAR A ENTIDADE (PUT ou POST)
         if (entidade.value.id) {
-            const response = await axios.put(`${API_BASE_URL}entidades/${entidade.value.id}/`, entidadePayload);
+            const response = await api.put(`/entidades/${entidade.value.id}/`, entidadePayload);
             savedEntidade = response.data;
         } else {
-            const response = await axios.post(`${API_BASE_URL}entidades/`, entidadePayload);
+            const response = await api.post('/entidades/', entidadePayload);
             savedEntidade = response.data;
         }
 
-        // 3. Salva os Contatos
+        // 7. USAMOS 'api' PARA SALVAR OS CONTATOS (PUT ou POST)
         const contatosPromises = entidade.value.contatos.map(contato => {
             const contatoPayload = { ...contato, entidade: savedEntidade.id };
             if (contatoPayload.tipo_contato === 'T') {
-                contatoPayload.valor = onlyDigits(contatoPayload.valor); // telefone só dígitos
+                contatoPayload.valor = onlyDigits(contatoPayload.valor);
             }
-            // e-mail vai como digitado (já validado)
             if (contato.id) {
-                // Atualiza contato existente
-                return axios.put(`${API_BASE_URL}contatos/${contato.id}/`, contatoPayload);
+                return api.put(`/contatos/${contato.id}/`, contatoPayload);
             } else {
-                // Cria novo contato
-                return axios.post(`${API_BASE_URL}contatos/`, contatoPayload);
+                return api.post('/contatos/', contatoPayload);
             }
         });
 
@@ -272,7 +235,7 @@ const saveEntidade = async () => {
 
         toast.add({ severity: 'success', summary: 'Sucesso', detail: 'Entidade salva com sucesso!', life: 3000 });
         entidadeDialog.value = false;
-        fetchData(); // Recarrega a lista da tabela
+        fetchData();
 
     } catch (err) {
         console.error("Erro ao salvar entidade:", err.response?.data || err);
@@ -281,8 +244,8 @@ const saveEntidade = async () => {
 };
 
 const editEntidade = (prod) => {
-    // Busca a versão mais recente da entidade, incluindo os contatos aninhados
-    axios.get(`${API_BASE_URL}entidades/${prod.id}/`).then(response => {
+    // 8. USAMOS 'api' PARA BUSCAR A ENTIDADE PARA EDIÇÃO
+    api.get(`/entidades/${prod.id}/`).then(response => {
         entidade.value = response.data;
         const cat = entidade.value.categoria;
         entidade.value.categoria = (cat && typeof cat === 'object') ? cat.id : (cat ?? null);
@@ -301,11 +264,12 @@ const confirmDeleteEntidade = (prod) => {
 };
 
 const deleteEntidade = () => {
-    axios.delete(`${API_BASE_URL}entidades/${entidade.value.id}/`)
+    // 9. USAMOS 'api' PARA DELETAR A ENTIDADE
+    api.delete(`/entidades/${entidade.value.id}/`)
         .then(() => {
             toast.add({ severity: 'success', summary: 'Sucesso', detail: 'Entidade deletada!', life: 3000 });
             deleteEntidadeDialog.value = false;
-            fetchData(); // Atualiza a lista
+            fetchData();
         })
         .catch(err => {
             console.error("Erro ao deletar:", err);
@@ -318,14 +282,15 @@ const confirmDeleteSelected = () => {
 };
 
 const deleteSelectedEntidades = () => {
-    const promises = selectedEntidades.value.map(ent => axios.delete(`${API_BASE_URL}entidades/${ent.id}/`));
+    // 10. USAMOS 'api' PARA DELETAR MÚLTIPLAS ENTIDADES
+    const promises = selectedEntidades.value.map(ent => api.delete(`/entidades/${ent.id}/`));
     
     Promise.all(promises)
         .then(() => {
             toast.add({ severity: 'success', summary: 'Sucesso', detail: 'Entidades deletadas!', life: 3000 });
             deleteEntidadesDialog.value = false;
             selectedEntidades.value = [];
-            fetchData(); // Atualiza a lista
+            fetchData();
         })
         .catch(err => {
             console.error("Erro ao deletar selecionados:", err);
@@ -333,20 +298,16 @@ const deleteSelectedEntidades = () => {
         });
 };
 
-// opções do select de classificação
+// --- FILTROS E RELATÓRIOS --- (Nenhuma alteração aqui)
 const classificacoesOptions = [
   { label: 'Todos', value: null },
   { label: 'Gestor/Recebedor', value: 'gestor' },
   { label: 'Doador', value: 'doador' },
   { label: 'Ambos (Gestor e Doador)', value: 'ambos' }
 ];
-
-// helper para pegar id da categoria selecionada (pode vir objeto ou id)
 const categoriaSelecionadaId = computed(() =>
   typeof filtros.categoria === 'object' ? filtros.categoria?.id : filtros.categoria
 );
-
-// lista filtrada para a DataTable
 const entidadesFiltradas = computed(() => {
   const termo = (filters.value?.global?.value || '').toString().toLowerCase().trim();
   const catId = categoriaSelecionadaId.value;
@@ -354,60 +315,42 @@ const entidadesFiltradas = computed(() => {
   const bairro = (filtros.bairro || '').toString().toLowerCase().trim();
 
   return (entidades.value || []).filter(e => {
-    // filtro global (busca rápida)
     const passaBusca =
       !termo ||
       (e.nome_fantasia || '').toLowerCase().includes(termo) ||
       (e.razao_social || '').toLowerCase().includes(termo) ||
       (e.documento || '').toString().includes(termo) ||
       (e.bairro || '').toLowerCase().includes(termo);
-
-    // filtro classificação
     let passaClassificacao = true;
     if (cls === 'gestor') passaClassificacao = !!e.eh_gestor;
     else if (cls === 'doador') passaClassificacao = !!e.eh_doador;
     else if (cls === 'ambos') passaClassificacao = !!e.eh_gestor && !!e.eh_doador;
-
-    // filtro categoria
     const idDoRegistro = typeof e.categoria === 'object' ? e.categoria?.id : e.categoria;
     const passaCategoria = !catId || idDoRegistro === catId;
-
-    // filtro bairro
     const passaBairro = !bairro || (e.bairro || '').toLowerCase().includes(bairro);
-
     return passaBusca && passaClassificacao && passaCategoria && passaBairro;
   });
 });
-
-// limpar filtros
 const limparFiltros = () => {
   filtros.classificacao = null;
   filtros.categoria = null;
   filtros.bairro = null;
   filters.value.global.value = null;
 };
-
 const buildRelatorioQuery = () => {
   const qs = new URLSearchParams();
-
   if (filtros.classificacao) qs.set('classificacao', filtros.classificacao);
-  
   const categoriaId = typeof filtros.categoria === 'object' ? filtros.categoria?.id : filtros.categoria;
   if (categoriaId) qs.set('categoria', categoriaId);
-
   if (filtros.bairro) qs.set('bairro', filtros.bairro);
-
   const q = filters.value?.global?.value;
   if (q) qs.set('search', q);
-
   return qs.toString();
 };
-
 const abrirRelatorioEntidades = () => {
   const query = buildRelatorioQuery();
   window.open(`/relatorios/entidades?${query}`, '_blank');
 };
-
 const exportCSV = () => {
     dt.value.exportCSV();
 };

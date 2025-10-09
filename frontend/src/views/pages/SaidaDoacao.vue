@@ -1,13 +1,13 @@
 <script setup>
+// 1. IMPORTAMOS A NOSSA INSTÂNCIA 'api'
+import api from '@/services/api';
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import axios from 'axios';
 import { useToast } from 'primevue/usetoast';
 
-// PrimeVue (se não usar Tag no template, pode remover a import)
 import Card from 'primevue/card';
 import AutoComplete from 'primevue/autocomplete';
-import Calendar from 'primevue/calendar'; // (v4 deprecado; trocar por DatePicker depois)
+import Calendar from 'primevue/calendar';
 import InputNumber from 'primevue/inputnumber';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
@@ -20,244 +20,223 @@ const route = useRoute();
 const router = useRouter();
 const editing = computed(() => Boolean(route.params.id));
 
-// Base da API
-const API_BASE_URL = 'http://127.0.0.1:8005/api/';
+// 2. REMOVEMOS A URL FIXA
+// const API_BASE_URL = 'http://127.0.0.1:8005/api/';
 
 // ---- ESTADO ----
 const salvando = ref(false);
-
 const entidadesGestorasEncontradas = ref([]);
 const itensEncontrados = ref([]);
 const kitsEncontrados = ref([]);
 
-const displayEntidade = (e) =>
-  e?.nome_fantasia || e?.razao_social || e?.nome || '';
+const novaSaida = ref({
+    data_saida: new Date(),
+    entidade_gestora: null,
+    itens_saida: [],
+    kits_saida: [],
+    observacoes: ''
+});
 
+// ---- FUNÇÕES DE BUSCA E CARREGAMENTO ----
 const fetchEntidadeById = async (id) => {
-  if (!id) return null;
-  try {
-    const { data } = await axios.get(`${API_BASE_URL}entidades/${id}/`);
-    // normaliza para funcionar no AutoComplete (optionLabel nome_fantasia)
-    return {
-      ...data,
-      nome_fantasia: data.nome_fantasia || data.razao_social || data.nome || 'Sem nome'
-    };
-  } catch {
-    return null;
-  }
+    if (!id) return null;
+    try {
+        // 3. USAMOS 'api.get' COM CAMINHO RELATIVO
+        const { data } = await api.get(`/entidades/${id}/`);
+        return {
+            ...data,
+            nome_fantasia: data.nome_fantasia || data.razao_social || data.nome || 'Sem nome'
+        };
+    } catch {
+        return null;
+    }
 };
 
 const loadSaida = async (id) => {
-  // GET da doação realizada
-  const { data } = await axios.get(`${API_BASE_URL}doacoes-realizadas/${id}/`);
+    // 4. USAMOS 'api.get' COM CAMINHO RELATIVO
+    const { data } = await api.get(`/doacoes-realizadas/${id}/`);
+    const entidadeObj = await fetchEntidadeById(data.entidade_gestora);
 
-  // entidade_gestora no serializer é ID; precisamos do objeto para o AutoComplete
-  const entidadeObj = await fetchEntidadeById(data.entidade_gestora);
+    const itens = Array.isArray(data.itens_saida)
+        ? data.itens_saida.map(i => ({ item: i.item, quantidade: i.quantidade }))
+        : [];
+    const kits = Array.isArray(data.kits_saida)
+        ? data.kits_saida.map(k => ({ kit: k.kit, quantidade: k.quantidade }))
+        : [];
 
-  // itens/kits vêm aninhados no serializer de leitura
-  const itens = Array.isArray(data.itens_saida)
-    ? data.itens_saida.map(i => ({
-        item: i.item,                // já é {id, nome, unidade_medida, ...}
-        quantidade: i.quantidade
-      }))
-    : [];
-
-  const kits = Array.isArray(data.kits_saida)
-    ? data.kits_saida.map(k => ({
-        kit: k.kit,                  // já é {id, nome, itens_do_kit, ...}
-        quantidade: k.quantidade
-      }))
-    : [];
-
-  novaSaida.value = {
-    data_saida: data.data_saida ? new Date(data.data_saida) : new Date(),
-    entidade_gestora: entidadeObj,  // objeto compatível com o AutoComplete
-    itens_saida: itens,
-    kits_saida: kits,
-    observacoes: data.observacoes || ''
-  };
+    novaSaida.value = {
+        data_saida: data.data_saida ? new Date(data.data_saida) : new Date(),
+        entidade_gestora: entidadeObj,
+        itens_saida: itens,
+        kits_saida: kits,
+        observacoes: data.observacoes || ''
+    };
 };
 
 onMounted(async () => {
-  // Prefill quando vindo de DetalhesEntidade (querystring)
-  const q = route.query;
-  if (!editing.value && (q?.entidade_id || q?.entidade_nome)) {
-    const entidadeObj = q?.entidade_id
-      ? await fetchEntidadeById(Number(q.entidade_id))
-      : { id: null, nome_fantasia: q.entidade_nome || '' };
-    novaSaida.value.entidade_gestora = entidadeObj;
-  }
-
-  // Edição
-  if (editing.value) {
-    try {
-      await loadSaida(route.params.id);
-    } catch (err) {
-      console.error('Falha ao carregar saída:', err?.response?.data || err);
-      toast.add({
-        severity: 'error',
-        summary: 'Erro',
-        detail: 'Não foi possível carregar a doação de saída para edição.',
-        life: 5000
-      });
+    const q = route.query;
+    if (!editing.value && (q?.entidade_id || q?.entidade_nome)) {
+        const entidadeObj = q?.entidade_id
+            ? await fetchEntidadeById(Number(q.entidade_id))
+            : { id: null, nome_fantasia: q.entidade_nome || '' };
+        novaSaida.value.entidade_gestora = entidadeObj;
     }
-  }
+
+    if (editing.value) {
+        try {
+            await loadSaida(route.params.id);
+        } catch (err) {
+            console.error('Falha ao carregar saída:', err?.response?.data || err);
+            toast.add({
+                severity: 'error',
+                summary: 'Erro',
+                detail: 'Não foi possível carregar a doação de saída para edição.',
+                life: 5000
+            });
+        }
+    }
 });
 
-const voltar = () => router.back();
-
-const novaSaida = ref({
-  data_saida: new Date(),
-  entidade_gestora: null,
-  itens_saida: [],     // [{ item, quantidade }]
-  kits_saida: [],      // [{ kit, quantidade }]
-  observacoes: ''
-});
-
-// ---- HELPERS ----
-const hasItensValidos = computed(() =>
-  Array.isArray(novaSaida.value.itens_saida) &&
-  novaSaida.value.itens_saida.some(i => i?.item && Number(i?.quantidade) > 0)
-);
-
-const hasKitsValidos = computed(() =>
-  Array.isArray(novaSaida.value.kits_saida) &&
-  novaSaida.value.kits_saida.some(k => k?.kit && Number(k?.quantidade) > 0)
-);
-
-const podeSalvar = computed(() =>
-  !!novaSaida.value.entidade_gestora &&
-  (hasItensValidos.value || hasKitsValidos.value) &&
-  !salvando.value
-);
-
-const totalLinhas = computed(() =>
-  (novaSaida.value.itens_saida?.length || 0) + (novaSaida.value.kits_saida?.length || 0)
-);
-
-// **FUNÇÕES QUE ESTAVAM FALTANDO/INACESSÍVEIS NO TEMPLATE**
-const getStockClass = (option) => {
-  const estoque = option?.estoque_atual ?? 0;
-  if (estoque === 0) return 'text-red-500';
-  if (estoque > 0 && estoque <= 10) return 'text-orange-500';
-  return 'text-green-500';
-};
-
-const getKitClass = (option) => {
-  const montavel = option?.quantidade_montavel ?? 0;
-  if (montavel === 0) return 'text-red-500';
-  if (montavel > 0 && montavel <= 5) return 'text-orange-500';
-  return 'text-green-500';
-};
-
-// ---- BUSCAS ----
 const searchEntidadeGestora = async (event) => {
-  try {
-    const q = event?.query || '';
-    const resp = await axios.get(`${API_BASE_URL}entidades/?eh_gestor=true&search=${q}`);
-    entidadesGestorasEncontradas.value = Array.isArray(resp.data?.results)
-      ? resp.data.results
-      : (Array.isArray(resp.data) ? resp.data : []);
-  } catch {
-    entidadesGestorasEncontradas.value = [];
-  }
+    try {
+        const q = event?.query || '';
+        // 5. USAMOS 'api.get' COM CAMINHO RELATIVO
+        const resp = await api.get(`/entidades/?eh_gestor=true&search=${q}`);
+        entidadesGestorasEncontradas.value = Array.isArray(resp.data?.results)
+            ? resp.data.results
+            : (Array.isArray(resp.data) ? resp.data : []);
+    } catch {
+        entidadesGestorasEncontradas.value = [];
+    }
 };
 
 const searchItem = async (event) => {
-  try {
-    const q = encodeURIComponent(event?.query || '');
-    const resp = await axios.get(`${API_BASE_URL}itens/?search=${q}`);
-    itensEncontrados.value = Array.isArray(resp.data?.results) ? resp.data.results : (Array.isArray(resp.data) ? resp.data : []);
-  } catch {
-    itensEncontrados.value = [];
-  }
+    try {
+        const q = encodeURIComponent(event?.query || '');
+        // 6. USAMOS 'api.get' COM CAMINHO RELATIVO
+        const resp = await api.get(`/itens/?search=${q}`);
+        itensEncontrados.value = Array.isArray(resp.data?.results) ? resp.data.results : (Array.isArray(resp.data) ? resp.data : []);
+    } catch {
+        itensEncontrados.value = [];
+    }
 };
 
 const searchKit = async (event) => {
-  try {
-    const q = encodeURIComponent(event?.query || '');
-    const resp = await axios.get(`${API_BASE_URL}kits/?search=${q}`);
-    kitsEncontrados.value = Array.isArray(resp.data?.results) ? resp.data.results : (Array.isArray(resp.data) ? resp.data : []);
-  } catch {
-    kitsEncontrados.value = [];
-  }
+    try {
+        const q = encodeURIComponent(event?.query || '');
+        // 7. USAMOS 'api.get' COM CAMINHO RELATIVO
+        const resp = await api.get(`/kits/?search=${q}`);
+        kitsEncontrados.value = Array.isArray(resp.data?.results) ? resp.data.results : (Array.isArray(resp.data) ? resp.data : []);
+    } catch {
+        kitsEncontrados.value = [];
+    }
 };
 
-// ---- LINHAS (add/remover) ----
+// ---- FUNÇÕES DE UI E HELPERS (sem alteração) ----
+const voltar = () => router.back();
+const hasItensValidos = computed(() =>
+    Array.isArray(novaSaida.value.itens_saida) &&
+    novaSaida.value.itens_saida.some(i => i?.item && Number(i?.quantidade) > 0)
+);
+const hasKitsValidos = computed(() =>
+    Array.isArray(novaSaida.value.kits_saida) &&
+    novaSaida.value.kits_saida.some(k => k?.kit && Number(k?.quantidade) > 0)
+);
+const podeSalvar = computed(() =>
+    !!novaSaida.value.entidade_gestora &&
+    (hasItensValidos.value || hasKitsValidos.value) &&
+    !salvando.value
+);
+const totalLinhas = computed(() =>
+    (novaSaida.value.itens_saida?.length || 0) + (novaSaida.value.kits_saida?.length || 0)
+);
+const getStockClass = (option) => {
+    const estoque = option?.estoque_atual ?? 0;
+    if (estoque === 0) return 'text-red-500';
+    if (estoque > 0 && estoque <= 10) return 'text-orange-500';
+    return 'text-green-500';
+};
+const getKitClass = (option) => {
+    const montavel = option?.quantidade_montavel ?? 0;
+    if (montavel === 0) return 'text-red-500';
+    if (montavel > 0 && montavel <= 5) return 'text-orange-500';
+    return 'text-green-500';
+};
 const adicionarItemNaSaida = () => {
-  if (!Array.isArray(novaSaida.value.itens_saida)) novaSaida.value.itens_saida = [];
-  novaSaida.value.itens_saida.push({ item: null, quantidade: 1 });
+    if (!Array.isArray(novaSaida.value.itens_saida)) novaSaida.value.itens_saida = [];
+    novaSaida.value.itens_saida.push({ item: null, quantidade: 1 });
 };
 const removerItemNaSaida = (index) => {
-  if (!Array.isArray(novaSaida.value.itens_saida)) return;
-  novaSaida.value.itens_saida.splice(index, 1);
+    if (!Array.isArray(novaSaida.value.itens_saida)) return;
+    novaSaida.value.itens_saida.splice(index, 1);
 };
 const adicionarKitNaSaida = () => {
-  if (!Array.isArray(novaSaida.value.kits_saida)) novaSaida.value.kits_saida = [];
-  novaSaida.value.kits_saida.push({ kit: null, quantidade: 1 });
+    if (!Array.isArray(novaSaida.value.kits_saida)) novaSaida.value.kits_saida = [];
+    novaSaida.value.kits_saida.push({ kit: null, quantidade: 1 });
 };
 const removerKitNaSaida = (index) => {
-  if (!Array.isArray(novaSaida.value.kits_saida)) return;
-  novaSaida.value.kits_saida.splice(index, 1);
+    if (!Array.isArray(novaSaida.value.kits_saida)) return;
+    novaSaida.value.kits_saida.splice(index, 1);
+};
+const getApiErrorMessage = (error) => {
+    const data = error?.response?.data;
+    if (data?.detail) return data.detail;
+    if (Array.isArray(data) && data[0]) return data[0];
+    if (data && typeof data === 'object') {
+        const first = Object.values(data)[0];
+        if (Array.isArray(first) && first[0]) return first[0];
+    }
+    return 'Não foi possível registrar a saída.';
 };
 
 // ---- SUBMIT ----
-const getApiErrorMessage = (error) => {
-  const data = error?.response?.data;
-  if (data?.detail) return data.detail;
-  if (Array.isArray(data) && data[0]) return data[0];
-  if (data && typeof data === 'object') {
-    const first = Object.values(data)[0];
-    if (Array.isArray(first) && first[0]) return first[0];
-  }
-  return 'Não foi possível registrar a saída.';
-};
-
 const saveSaida = async () => {
-  if (!podeSalvar.value) {
-    toast.add({ severity: 'warn', summary: 'Atenção', detail: 'Selecione a entidade gestora e adicione ao menos um item ou kit com quantidade.', life: 3500 });
-    return;
-  }
-
-  salvando.value = true;
-
-  const s = novaSaida.value;
-  const payload = {
-    data_saida: s.data_saida instanceof Date ? s.data_saida.toISOString().split('T')[0] : s.data_saida,
-    observacoes: s.observacoes || '',
-    entidade_gestora: s.entidade_gestora.id,
-    itens_saida: s.itens_saida
-      .filter(i => i.item && Number(i.quantidade) > 0)
-      .map(i => ({ item: i.item.id, quantidade: i.quantidade })),
-    kits_saida: s.kits_saida
-      .filter(k => k.kit && Number(k.quantidade) > 0)
-      .map(k => ({ kit: k.kit.id, quantidade: k.quantidade })),
-  };
-
-  try {
-    if (editing.value) {
-      await axios.put(`${API_BASE_URL}doacoes-realizadas/${route.params.id}/`, payload);
-      toast.add({ severity: 'success', summary: 'Sucesso', detail: 'Saída atualizada!', life: 3500 });
-      router.push({ name: 'ListaSaidas' });
-    } else {
-      await axios.post(`${API_BASE_URL}doacoes-realizadas/`, payload);
-      toast.add({ severity: 'success', summary: 'Sucesso', detail: 'Saída registrada! Estoque atualizado.', life: 4000 });
-      novaSaida.value = {
-        data_saida: new Date(),
-        entidade_gestora: null,
-        itens_saida: [],
-        kits_saida: [],
-        observacoes: ''
-      };
-      router.push({ name: 'ListaSaidas' });
+    if (!podeSalvar.value) {
+        toast.add({ severity: 'warn', summary: 'Atenção', detail: 'Selecione a entidade gestora e adicione ao menos um item ou kit com quantidade.', life: 3500 });
+        return;
     }
-  } catch (err) {
-    const msg = getApiErrorMessage(err);
-    console.error('Erro ao salvar saída:', err?.response?.data || err);
-    toast.add({ severity: 'error', summary: 'Erro', detail: msg, life: 6000 });
-  } finally {
-    salvando.value = false;
-  }
+
+    salvando.value = true;
+
+    const s = novaSaida.value;
+    const payload = {
+        data_saida: s.data_saida instanceof Date ? s.data_saida.toISOString().split('T')[0] : s.data_saida,
+        observacoes: s.observacoes || '',
+        entidade_gestora: s.entidade_gestora.id,
+        itens_saida: s.itens_saida
+            .filter(i => i.item && Number(i.quantidade) > 0)
+            .map(i => ({ item: i.item.id, quantidade: i.quantidade })),
+        kits_saida: s.kits_saida
+            .filter(k => k.kit && Number(k.quantidade) > 0)
+            .map(k => ({ kit: k.kit.id, quantidade: k.quantidade })),
+    };
+
+    try {
+        if (editing.value) {
+            // 8. USAMOS 'api.put' COM CAMINHO RELATIVO
+            await api.put(`/doacoes-realizadas/${route.params.id}/`, payload);
+            toast.add({ severity: 'success', summary: 'Sucesso', detail: 'Saída atualizada!', life: 3500 });
+            router.push({ name: 'ListaSaidas' });
+        } else {
+            // 9. USAMOS 'api.post' COM CAMINHO RELATIVO
+            await api.post('/doacoes-realizadas/', payload);
+            toast.add({ severity: 'success', summary: 'Sucesso', detail: 'Saída registrada! Estoque atualizado.', life: 4000 });
+            novaSaida.value = {
+                data_saida: new Date(),
+                entidade_gestora: null,
+                itens_saida: [],
+                kits_saida: [],
+                observacoes: ''
+            };
+            router.push({ name: 'ListaSaidas' });
+        }
+    } catch (err) {
+        const msg = getApiErrorMessage(err);
+        console.error('Erro ao salvar saída:', err?.response?.data || err);
+        toast.add({ severity: 'error', summary: 'Erro', detail: msg, life: 6000 });
+    } finally {
+        salvando.value = false;
+    }
 };
 </script>
 

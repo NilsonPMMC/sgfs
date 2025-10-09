@@ -1,8 +1,8 @@
 <script setup>
+import api from '@/services/api';
 import { useAuthStore } from '@/store/auth';
 import { ref, onMounted, watch } from 'vue';
 import { useLayout } from '@/layout/composables/layout';
-import axios from 'axios';
 
 const authStore = useAuthStore();
 const { isDarkTheme } = useLayout();
@@ -10,8 +10,6 @@ const loading = ref(true);
 const dashboardData = ref(null);
 const alertas = ref([]);
 const alertasLoading = ref(true);
-const API_URL = 'http://127.0.0.1:8005/api/dashboard/';
-const API_ALERTAS = 'http://127.0.0.1:8005/api/alertas/';
 
 // Estado para os dados dos gráficos
 const estoquePieData = ref(null);
@@ -26,7 +24,7 @@ const lineOptions = ref(null);
 
 const formatarDia = (dataString) => {
     if (!dataString) return '';
-    const partes = dataString.split('-'); // Divide a string em ["AAAA", "MM", "DD"]
+    const partes = dataString.split('-');
     return partes[2];
 };
 
@@ -69,7 +67,6 @@ const setChartData = (data) => {
         };
     }
 
-    // 1. Gráfico de Pizza: Estoque
     const { total_itens, itens_zerados, itens_estoque_baixo } = data.indicadores_estoque;
     const itens_ok = total_itens - itens_zerados - itens_estoque_baixo;
 
@@ -85,7 +82,6 @@ const setChartData = (data) => {
         }]
     };
 
-    // 2. Gráfico de Barras: Ranking de Entidades Gestoras
     rankingEntidadesBarData.value = {
         labels: data.ranking_entidades_gestoras.map(e => e.entidade_gestora__nome_fantasia),
         datasets: [{
@@ -96,7 +92,6 @@ const setChartData = (data) => {
         }]
     };
     
-    // 3. Gráfico de Barras: Ranking de Doadores
     rankingDoadoresBarData.value = {
         labels: data.ranking_doadores.map(d => d.nome_doador),
         datasets: [{
@@ -107,7 +102,6 @@ const setChartData = (data) => {
         }]
     };
 
-    // Configurações visuais dos gráficos
     pieOptions.value = { plugins: { legend: { labels: { color: textColor, usePointStyle: true } } } };
     barOptions.value = {
         plugins: { legend: { display: false } },
@@ -121,9 +115,10 @@ const setChartData = (data) => {
 const fetchAlertasDashboard = async () => {
   alertasLoading.value = true;
   try {
-    const r = await axios.get(API_ALERTAS);
+    // CORRIGIDO: usa 'api.get' com caminho relativo
+    const r = await api.get('/alertas/');
     const lista = Array.isArray(r.data?.results) ? r.data.results : (Array.isArray(r.data) ? r.data : []);
-    alertas.value = lista.filter(a => !a.lido).slice(0, 5); // mostra até 5
+    alertas.value = lista.filter(a => !a.lido).slice(0, 5);
   } catch (e) {
     console.error('Erro ao buscar alertas:', e);
     alertas.value = [];
@@ -133,7 +128,8 @@ const fetchAlertasDashboard = async () => {
 };
 
 onMounted(() => {
-    axios.get(API_URL)
+    // CORRIGIDO: usa 'api.get' com caminho relativo
+    api.get('/dashboard/')
         .then(response => {
             dashboardData.value = response.data;
             setChartData(response.data); 
@@ -141,7 +137,6 @@ onMounted(() => {
         .catch(error => console.error("Erro ao buscar dados do dashboard:", error))
         .finally(() => loading.value = false);
 
-    // carrega alertas em paralelo
     fetchAlertasDashboard();
 });
 
