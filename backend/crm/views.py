@@ -375,39 +375,68 @@ class AlertaViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def gerar_pendentes(self, request):
-        """
-        Gera (idempotente) alertas de entidades gestoras sem atendimento há 60+ dias.
-        """
         hoje = timezone.now().date()
         limite = hoje - timedelta(days=60)
-
-        # entidades gestoras ativas
         gestoras = Entidade.objects.filter(eh_gestor=True)
-
         criados = 0
         for g in gestoras:
-            # última saída para essa gestora
             ultima_saida = (DoacaoRealizada.objects
                             .filter(entidade_gestora=g)
                             .order_by('-data_saida')
                             .values_list('data_saida', flat=True)
                             .first())
 
-            # sem registro algum OU último antes do limite
             if (not ultima_saida) or (ultima_saida <= limite):
-                # evita duplicar alerta igual (mesma entidade, mesmo título base e não lido)
-                existe = Alerta.objects.filter(
-                    entidade=g,
-                    titulo='Entidade sem atendimento há 60+ dias',
-                    lido=False
-                ).exists()
+                titulo = 'Entidade sem atendimento há 60+ dias'
+                existe = Alerta.objects.filter(entidade=g, titulo=titulo, lido=False).exists()
                 if not existe:
                     Alerta.objects.create(
-                        titulo='Entidade sem atendimento há 60+ dias',
-                        mensagem=f'<strong>{g.nome_fantasia or g.razao_social or "Entidade"}</strong> está sem atendimento desde {ultima_saida.strftime("%d/%m/%Y") if ultima_saida else "sempre"}.',
+                        titulo=titulo,
+                        mensagem=f'A entidade {g.nome_fantasia or g.razao_social} está sem atendimento desde {ultima_saida.strftime("%d/%m/%Y") if ultima_saida else "sempre"}.',
                         entidade=g,
                         severity='warn'
                     )
                     criados += 1
+        return Response({'gerados': criados}, status=status.HTTP_201_CREATED)
 
+    # --- NOVA AÇÃO ADICIONADA ---
+    @action(detail=False, methods=['post'], url_path='gerar-alertas-vigencia')
+    def gerar_alertas_vigencia(self, request):
+        """
+        Gera (idempotente) alertas para entidades com vigência vencida ou próxima do vencimento.
+        """
+        hoje = timezone.now().date()
+        limite_vencimento = hoje + timedelta(days=30)
+        criados = 0
+
+        # 1. Alertas para vigências vencidas
+        entidades_vencidas = Entidade.objects.filter(vigencia_ate__lt=hoje)
+        for entidade in entidades_vencidas:
+            titulo = 'Vigência de atendimento vencida'
+            # Evita duplicar o mesmo alerta se ele ainda não foi lido
+            existe = Alerta.objects.filter(entidade=entidade, titulo=titulo, lido=False).exists()
+            if not existe:
+                Alerta.objects.create(
+                    titulo=titulo,
+                    mensagem=f'A vigência da entidade {entidade.nome_fantasia or entidade.razao_social} venceu em {entidade.vigencia_ate.strftime("%d/%m/%Y")}.',
+                    entidade=entidade,
+                    severity='danger' # Alerta de perigo (vermelho)
+                )
+                criados += 1
+
+        # 2. Alertas para vigências próximas do vencimento (próximos 30 dias)
+        entidades_proximas = Entidade.objects.filter(vigencia_ate__gte=hoje, vigencia_ate__lte=limite_vencimento)
+        for entidade in entidades_proximas:
+            titulo = 'Vigência próxima do vencimento'
+            existe = Alerta.objects.filter(entidade=entidade, titulo=titulo, lido=False).exists()
+            if not existe:
+                dias_restantes = (entidade.vigencia_ate - hoje).days
+                Alerta.objects.create(
+                    titulo=titulo,
+                    mensagem=f'A vigência da entidade {entidade.nome_fantasia or entidade.razao_social} vencerá em {dias_restantes} dias ({entidade.vigencia_ate.strftime("%d/%m/%Y")}).',
+                    entidade=entidade,
+                    severity='warn' # Alerta de aviso (amarelo)
+                )
+                criados += 1
+                
         return Response({'gerados': criados}, status=status.HTTP_201_CREATED)

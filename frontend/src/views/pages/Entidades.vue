@@ -7,6 +7,7 @@ import { ref, onMounted, watch, computed, reactive } from 'vue';
 import { FilterMatchMode } from '@primevue/core/api';
 import { useToast } from 'primevue/usetoast';
 import Divider from 'primevue/divider';
+import ProgressSpinner from 'primevue/progressspinner';
 
 // --- CONFIGURAÇÕES E ESTADO ---
 const authStore = useAuthStore();
@@ -21,6 +22,7 @@ const filters = ref({
     global: { value: null, matchMode: FilterMatchMode.CONTAINS }
 });
 const submitted = ref(false);
+const loading = ref(true);
 
 const filtros = reactive({
   classificacao: null,
@@ -32,10 +34,6 @@ const categorias = ref([]);
 const entidade = ref({
     contatos: []
 });
-
-// 2. REMOVEMOS AS CONSTANTES DE URL FIXAS
-// const API_BASE_URL = 'http://127.0.0.1:8005/api/';
-// const API_URL = 'http://127.0.0.1:8005/api/entidades/';
 
 // --- FUNÇÕES AUXILIARES --- (Nenhuma alteração aqui)
 const formatDateToAPI = (date) => {
@@ -84,28 +82,27 @@ const toggleError = ref(false);
 
 // --- BUSCA INICIAL DE DADOS ---
 const fetchData = async () => {
+    loading.value = true; // Mostra o preloader
     let allEntidades = [];
-    let nextUrl = '/entidades/'; // A primeira chamada é relativa
+    let nextUrl = '/entidades/';
 
-    while (nextUrl) {
-        try {
+    try {
+        while (nextUrl) {
             const response = await api.get(nextUrl);
             allEntidades = allEntidades.concat(response.data.results);
-            // CORREÇÃO: Usamos a URL completa que a API nos dá para as próximas páginas
             nextUrl = response.data.next;
-        } catch (error) {
-            console.error("Erro ao buscar uma página de entidades:", error);
-            toast.add({ severity: 'error', summary: 'Erro', detail: 'Não foi possível carregar todas as entidades.', life: 3000 });
-            nextUrl = null;
         }
+        entidades.value = allEntidades;
+    } catch (error) {
+        console.error("Erro ao buscar uma página de entidades:", error);
+        toast.add({ severity: 'error', summary: 'Erro', detail: 'Não foi possível carregar todas as entidades.', life: 3000 });
+    } finally {
+        loading.value = false; // Esconde o preloader, mesmo se der erro
     }
-    entidades.value = allEntidades;
 };
 
 onMounted(() => {
     fetchData();
-
-    // 4. USAMOS 'api' PARA BUSCAR CATEGORIAS
     api.get('/categorias/')
         .then(response => {
             categorias.value = response.data.results || response.data;
@@ -114,6 +111,10 @@ onMounted(() => {
             console.error("Erro ao buscar categorias:", error);
         });
 });
+
+const verDetalhes = (id) => {
+    router.push({ name: 'detalhes-entidade', params: { id } });
+};
 
 // A CHAMADA PARA O VIACEP CONTINUA USANDO 'axios' POR SER EXTERNA
 watch(() => entidade.value.cep, (novoCep) => {
@@ -377,8 +378,11 @@ const exportCSV = () => {
                     <Button label="Exportar CSV" icon="pi pi-upload" class="p-button-help" @click="exportCSV($event)" />
                 </template>
             </Toolbar>
-
+            <div v-if="loading" class="flex justify-center items-center py-8">
+                <ProgressSpinner fill="transparent" animationDuration=".5s" />
+            </div>
             <DataTable
+                v-else
                 ref="dt"
                 v-model:selection="selectedEntidades"
                 :value="entidadesFiltradas"

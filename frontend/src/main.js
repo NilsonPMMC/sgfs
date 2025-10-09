@@ -111,19 +111,19 @@ updatePreset({
 app.use(ToastService);
 app.use(ConfirmationService);
 
-const authStore = useAuthStore();
-authStore.fetchUser();
+
 
 axios.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response && error.response.status === 401) {
             const authStore = useAuthStore();
-            authStore.user = null; // Limpa os dados do usuário na store
-            router.push('/login'); // Redireciona para a tela de login
+            authStore.logout();
         }
         return Promise.reject(error);
     }
 );
 
-app.mount('#app');
+router.isReady().then(() => {
+    app.mount('#app');
+});

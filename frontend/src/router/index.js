@@ -132,19 +132,23 @@ const router = createRouter({
 
 // 5. Guarda de Navegação (ESSENCIAL PARA SEGURANÇA)
 router.beforeEach((to, from, next) => {
-    // Verifica se a rota para a qual o usuário está navegando exige autenticação
+    // Lista de rotas que são públicas e não devem ser acessadas por usuários já logados.
+    const authPages = ['login', 'forgotPassword', 'resetPassword'];
+    const isAuthPage = authPages.includes(to.name);
+
+    // Verifica se a rota para a qual o usuário está navegando exige autenticação.
     const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
     const isAuthenticated = !!localStorage.getItem('accessToken');
 
     if (requiresAuth && !isAuthenticated) {
-        // Se a rota exige login e o usuário não está logado, redireciona para o login
+        // Se a rota exige login e o usuário não está logado, redireciona para o login.
         next({ name: 'login' });
-    } else if (to.name === 'login' && isAuthenticated) {
-        // Se o usuário já está logado e tenta acessar a página de login, redireciona para o dashboard
+    } else if (isAuthPage && isAuthenticated) {
+        // Se o usuário já está logado e tenta acessar uma página de autenticação (login, reset, etc.),
+        // redireciona para o dashboard.
         next({ name: 'dashboard' });
-    }
-    else {
-        // Caso contrário, permite a navegação
+    } else {
+        // Caso contrário, permite a navegação.
         next();
     }
 });

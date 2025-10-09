@@ -16,8 +16,11 @@ const unreadCount = ref(0);
 const fetchAlertas = async () => {
     loading.value = true;
     try {
-        // 3. USAMOS 'api.post' COM CAMINHO RELATIVO
-        await api.post('/alertas/gerar_pendentes/').catch(() => {});
+        await Promise.all([
+            api.post('/alertas/gerar_pendentes/').catch(() => {}),
+            // --- NOVA LINHA ADICIONADA ---
+            api.post('/alertas/gerar-alertas-vigencia/').catch(() => {})
+        ]);
         
         // 4. USAMOS 'api.get' COM CAMINHO RELATIVO
         const r = await api.get('/alertas/');
