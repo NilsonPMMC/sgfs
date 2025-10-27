@@ -11,6 +11,12 @@ import Divider from 'primevue/divider';
 import Tag from 'primevue/tag';
 import Message from 'primevue/message';
 import Fieldset from 'primevue/fieldset';
+import Popover from 'primevue/popover';
+import Tabs from 'primevue/tabs';
+import TabList from 'primevue/tablist';
+import Tab from 'primevue/tab';
+import TabPanels from 'primevue/tabpanels';
+import TabPanel from 'primevue/tabpanel';
 
 // --- ESTADO DO COMPONENTE ---
 const authStore = useAuthStore();
@@ -45,8 +51,70 @@ const historicoDoacoes = ref([]);
 const op = ref();
 const overlayItems = ref([]);
 const toggleError = ref(false);
+const activeTabValue = ref();
 
-// --- FUNÇÕES AUXILIARES --- (Nenhuma alteração aqui)
+// --- FUNÇÕES AUXILIARES ---
+
+/**
+ * Converte uma string de data (ex: "2023-10-27" OU "27/10/2023")
+ * para um objeto Date local de forma segura, evitando erros de NaN e fuso horário.
+ */
+const parseAPIDate = (dateString) => {
+    if (!dateString || typeof dateString !== 'string') return null;
+
+    // Tira a parte da hora, se houver
+    const dateOnlyString = dateString.split('T')[0];
+    
+    let parts;
+    let year, monthIndex, day;
+
+    if (dateOnlyString.includes('-')) {
+        // Formato 1: "YYYY-MM-DD"
+        parts = dateOnlyString.split('-');
+        if (parts.length === 3) {
+            year = parseInt(parts[0], 10);
+            monthIndex = parseInt(parts[1], 10) - 1; // Mês é 0-indexado
+            day = parseInt(parts[2], 10);
+        }
+    } else if (dateOnlyString.includes('/')) {
+        // Formato 2: "DD/MM/YYYY"
+        parts = dateOnlyString.split('/');
+        if (parts.length === 3) {
+            day = parseInt(parts[0], 10);
+            monthIndex = parseInt(parts[1], 10) - 1; // Mês é 0-indexado
+            year = parseInt(parts[2], 10);
+        }
+    }
+
+    // Verifica se os valores são válidos
+    if (!isNaN(year) && !isNaN(monthIndex) && !isNaN(day)) {
+        // Validação extra para anos curtos (ex: "25" ao invés de "2025")
+        if (year < 100) {
+             year += 2000; // Suposição simples
+        }
+        // Cria a data na hora local
+        return new Date(year, monthIndex, day);
+    }
+    
+    // Fallback para o caso de um formato que o JS já entenda (ex: ISO completa)
+    const dt = new Date(dateString);
+    if (!isNaN(dt.getTime())) return dt;
+
+    console.warn('Falha ao fazer parse da data:', dateString);
+    return null; // Retorna null se tudo falhar
+};
+
+// Função para formatar a data de AAAA-MM-DD para DD/MM/AAAA
+const formatarData = (dataString) => {
+    // Se a data não existir, retorna um texto padrão
+    if (!dataString) {
+        return 'Não informada';
+    }
+    // Divide a string da data e remonta no formato brasileiro
+    const [ano, mes, dia] = dataString.split('-');
+    return `${dia}/${mes}/${ano}`;
+};
+
 const formatDateToAPI = (date) => {
     if (!date) return null;
     const d = new Date(date);
@@ -131,11 +199,15 @@ const editarSaida = (registro) => {
     router.push({ name: 'EditarSaidaDoacao', params: { id: registro.id } });
 };
 const formatarMesAno = (dataString) => {
-    const data = new Date(dataString);
+    const data = parseAPIDate(dataString);
+    if (!data) return 'Data inválida';
+
     return data.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
 };
 const formatarDia = (dataString) => {
-    const data = new Date(dataString);
+    const data = parseAPIDate(dataString);
+    if (!data) return '?';
+
     return data.getDate();
 };
 
@@ -148,6 +220,13 @@ const fetchEntidadeData = () => {
     api.get(`/entidades/${entidadeId}/`)
         .then(response => {
             entidade.value = response.data;
+            if (entidade.value.eh_gestor) {
+                activeTabValue.value = 'entregas';
+            } else if (entidade.value.eh_doador) {
+                activeTabValue.value = 'entradas';
+            } else {
+                activeTabValue.value = 'responsaveis';
+            }
             if (entidade.value.eh_gestor) {
                 fetchAtendimentos(entidadeId);
             }
@@ -215,9 +294,9 @@ const openEditDialog = () => {
     entidadeParaEditar.value.eh_gestor = !!entidadeParaEditar.value.eh_gestor;
     const cat = entidadeParaEditar.value.categoria;
     entidadeParaEditar.value.categoria = (cat && typeof cat === 'object') ? cat.id : (cat ?? null);
-    if (entidadeParaEditar.value.data_cadastro) entidadeParaEditar.value.data_cadastro = new Date(entidadeParaEditar.value.data_cadastro);
-    if (entidadeParaEditar.value.vigencia_de) entidadeParaEditar.value.vigencia_de = new Date(entidadeParaEditar.value.vigencia_de);
-    if (entidadeParaEditar.value.vigencia_ate) entidadeParaEditar.value.vigencia_ate = new Date(entidadeParaEditar.value.vigencia_ate);
+    entidadeParaEditar.value.data_cadastro = parseAPIDate(entidadeParaEditar.value.data_cadastro);
+    entidadeParaEditar.value.vigencia_de = parseAPIDate(entidadeParaEditar.value.vigencia_de);
+    entidadeParaEditar.value.vigencia_ate = parseAPIDate(entidadeParaEditar.value.vigencia_ate);
     submitted.value = false;
     toggleError.value = false;
     entidadeDialog.value = true;
@@ -305,7 +384,7 @@ const editResponsavel = (responsavelParaEditar) => {
         vinculoId: responsavelParaEditar.id
     };
     if (responsavel.value.data_nascimento) {
-        responsavel.value.data_nascimento = new Date(responsavel.value.data_nascimento);
+        responsavel.value.data_nascimento = parseAPIDate(responsavel.value.data_nascimento);
     }
     submitted.value = false;
     isEditMode.value = true;
@@ -393,7 +472,7 @@ const editBeneficiado = (beneficiadoParaEditar) => {
         vinculoId: beneficiadoParaEditar.id
     };
     if (beneficiado.value.data_nascimento) {
-        beneficiado.value.data_nascimento = new Date(beneficiado.value.data_nascimento);
+        beneficiado.value.data_nascimento = parseAPIDate(beneficiado.value.data_nascimento);
     }
     submitted.value = false;
     isBeneficiadoEditMode.value = true;
@@ -489,8 +568,8 @@ const abrirEmNovaAba = (name, params) => {
                 <div><strong>Observações:</strong> {{ entidade.observacoes }}</div>
                 <div class="grid grid-cols-12 gap-4">
                     <Fieldset class="col-span-6" legend="Vigência">
-                        <p class="m-0"><strong>Início:</strong> {{ entidade.vigencia_de }}</p>
-                        <p class="m-0"><strong>Término:</strong> {{ entidade.vigencia_ate }}</p>
+                        <p class="m-0"><strong>Início:</strong> {{ formatarData(entidade.vigencia_de) }}</p>
+                        <p class="m-0"><strong>Término:</strong> {{ formatarData(entidade.vigencia_ate) }}</p>
                     </Fieldset>
                     <Fieldset class="col-span-6" legend="Contatos">
                         <div v-if="entidade.contatos && entidade.contatos.length > 0">
@@ -510,122 +589,130 @@ const abrirEmNovaAba = (name, params) => {
                     </Fieldset>
                 </div>
             </div>
-            <TabView class="mt-5">
-                <TabPanel header="Histórico de Doações" v-if="entidade.eh_gestor">
-                    <div class="flex items-center justify-between mb-3">
-                        <h5 class="m-0">Histórico de Doações (Entregas)</h5>
-                        <Button
-                            label="Registrar Entrega"
-                            icon="pi pi-arrow-up"
-                            @click="goToRegistrarSaida"
-                        />
-                    </div>
-                    <Timeline :value="historicoAtendimentos" align="alternate" class="customized-timeline">
-                        <template #marker="slotProps">
-                            <span class="custom-marker shadow-2">
-                                <i class="pi pi-box"></i>
-                            </span>
-                        </template>
-                        <template #content="slotProps">
-                            <Card>
-                                <template #title>{{ formatarMesAno(slotProps.item.data_saida) }}</template>
-                                <template #subtitle>Dia: {{ formatarDia(slotProps.item.data_saida) }}</template>
-                                <template #content>
-                                    <p>{{ slotProps.item.observacoes || 'Nenhuma observação.' }}</p>
-                                    <Button label="Ver Itens Entregues" class="p-button-text" @click="toggleOverlay($event, slotProps.item)"></Button>
-                                </template>
-                                <template #footer>
-                                    <div class="flex justify-end">
-                                        <Button
-                                            label="Editar"
-                                            icon="pi pi-pencil"
-                                            text
-                                            @click="editarSaida(slotProps.item)"
-                                        />
-                                    </div>
-                                </template>
-                            </Card>
-                        </template>
-                    </Timeline>
-                </TabPanel>
-
-                <TabPanel header="Histórico de Doações" v-if="entidade.eh_doador">
-                    <div class="flex items-center justify-between mb-3">
-                        <h5 class="m-0">Histórico de Doações Recebidas (Entradas)</h5>
-                        <Button
-                            label="Registrar Entrada"
-                            icon="pi pi-arrow-down"
-                            @click="goToRegistrarEntrada"
-                        />
-                    </div>
-                    <Timeline :value="historicoDoacoes" align="alternate" class="customized-timeline">
-                        <template #marker="slotProps">
-                            <span class="custom-marker shadow-2">
-                                <i class="pi pi-box"></i>
-                            </span>
-                        </template>
-                        <template #content="slotProps">
-                            <Card>
-                                <template #title>{{ formatarMesAno(slotProps.item.data_doacao) }}</template>
-                                <template #subtitle>Dia: {{ formatarDia(slotProps.item.data_doacao) }}</template>
-                                <template #content>
-                                    <p>{{ slotProps.item.observacoes || 'Nenhuma observação.' }}</p>
-                                    <Button label="Ver Itens Doados" class="p-button-text" @click="toggleOverlay($event, slotProps.item)"></Button>
-                                </template>
-                                <template #footer>
-                                    <div class="flex justify-end">
-                                        <Button
-                                            label="Editar"
-                                            icon="pi pi-pencil"
-                                            text
-                                            @click="editarEntrada(slotProps.item)"
-                                        />
-                                    </div>
-                                </template>
-                            </Card>
-                        </template>
-                    </Timeline>
-                </TabPanel>
-
-                <TabPanel header="Responsáveis (Equipe)">
-                    <Toolbar class="mb-4">
-                        <template #start>
-                            <Button label="Cadastrar Responsável" icon="pi pi-plus" class="p-button-success" @click="openNovoResponsavelDialog" />
-                        </template>
-                    </Toolbar>
-                    <DataTable :value="entidade.responsaveis" responsiveLayout="scroll">
-                        <Column field="pessoa_fisica.nome_completo" header="Nome" sortable></Column>
-                        <Column field="cargo" header="Cargo" sortable></Column>
-                        <Column field="pessoa_fisica.telefone" header="Telefone"></Column>
-                        <Column field="pessoa_fisica.email" header="E-mail"></Column>
-                        <Column headerStyle="width: 12rem; text-align: center" header="Ações">
-                            <template #body="slotProps">
-                                <Button icon="pi pi-pencil" outlined rounded class="mr-2" @click="editResponsavel(slotProps.data)" />
-                                <Button icon="pi pi-trash" outlined rounded severity="danger" @click="confirmRemoverVinculo('responsável', slotProps.data)" />
+            <Tabs v-model:value="activeTabValue" class="mt-5">
+                <TabList>
+                    <Tab v-if="entidade.eh_gestor" value="entregas">Histórico de Doações (Entregas)</Tab>
+                    <Tab v-if="entidade.eh_doador" value="entradas">Histórico de Doações (Entradas)</Tab>
+                    <Tab value="responsaveis">Responsáveis (Equipe)</Tab>
+                    <Tab v-if="entidade.eh_gestor" value="beneficiados">Beneficiados (Munícipes)</Tab>
+                </TabList>
+                <TabPanels>
+                    <TabPanel v-if="entidade.eh_gestor" value="entregas">
+                        <div class="flex items-center justify-between mb-3">
+                            <h5 class="m-0">Histórico de Doações (Entregas)</h5>
+                            <Button
+                                label="Registrar Entrega"
+                                icon="pi pi-arrow-up"
+                                @click="goToRegistrarSaida"
+                            />
+                        </div>
+                        <Timeline :value="historicoAtendimentos" align="alternate" class="customized-timeline">
+                            <template #marker="slotProps">
+                                <span class="custom-marker shadow-2">
+                                    <i class="pi pi-box"></i>
+                                </span>
                             </template>
-                        </Column>
-                    </DataTable>
-                </TabPanel>
-                
-                <TabPanel header="Beneficiados (Munícipes)" v-if="entidade.eh_gestor">
-                    <Toolbar class="mb-4">
-                        <template #start>
-                            <Button label="Cadastrar Beneficiado" icon="pi pi-plus" class="p-button-success" @click="openNovoBeneficiadoDialog" />
-                        </template>
-                    </Toolbar>
-                    <DataTable :value="entidade.beneficiarios" responsiveLayout="scroll">
-                        <Column field="pessoa_fisica.nome_completo" header="Nome" sortable></Column>
-                        <Column field="pessoa_fisica.cpf" header="CPF" sortable></Column>
-                        <Column field="pessoa_fisica.telefone" header="Telefone"></Column>
-                        <Column headerStyle="width: 12rem; text-align: center" header="Ações">
-                            <template #body="slotProps">
-                                <Button icon="pi pi-pencil" outlined rounded class="mr-2" @click="editBeneficiado(slotProps.data)" />
-                                <Button icon="pi pi-trash" outlined rounded severity="danger" @click="confirmRemoverVinculo('beneficiado', slotProps.data)" />
+                            <template #content="slotProps">
+                                <Card>
+                                    <template #title>{{ formatarMesAno(slotProps.item.data_saida) }}</template>
+                                    <template #subtitle>Dia: {{ formatarDia(slotProps.item.data_saida) }}</template>
+                                    <template #content>
+                                        <p>{{ slotProps.item.observacoes || 'Nenhuma observação.' }}</p>
+                                        <Button label="Ver Itens Entregues" class="p-button-text" @click="toggleOverlay($event, slotProps.item)"></Button>
+                                    </template>
+                                    <template #footer>
+                                        <div class="flex justify-end">
+                                            <Button
+                                                label="Editar"
+                                                icon="pi pi-pencil"
+                                                text
+                                                @click="editarSaida(slotProps.item)"
+                                            />
+                                        </div>
+                                    </template>
+                                </Card>
                             </template>
-                        </Column>
-                    </DataTable>
-                </TabPanel>
-            </TabView>
+                        </Timeline>
+                    </TabPanel>
+
+                    <TabPanel v-if="entidade.eh_doador" value="entradas">
+                        <div class="flex items-center justify-between mb-3">
+                            <h5 class="m-0">Histórico de Doações Recebidas (Entradas)</h5>
+                            <Button
+                                label="Registrar Entrada"
+                                icon="pi pi-arrow-down"
+                                @click="goToRegistrarEntrada"
+                            />
+                        </div>
+                        <Timeline :value="historicoDoacoes" align="alternate" class="customized-timeline">
+                            <template #marker="slotProps">
+                                <span class="custom-marker shadow-2">
+                                    <i class="pi pi-box"></i>
+                                </span>
+                            </template>
+                            <template #content="slotProps">
+                                <Card>
+                                    <template #title>{{ formatarMesAno(slotProps.item.data_doacao) }}</template>
+                                    <template #subtitle>Dia: {{ formatarDia(slotProps.item.data_doacao) }}</template>
+                                    <template #content>
+                                        <p>{{ slotProps.item.observacoes || 'Nenhuma observação.' }}</p>
+                                        <Button label="Ver Itens Doados" class="p-button-text" @click="toggleOverlay($event, slotProps.item)"></Button>
+                                    </template>
+                                    <template #footer>
+                                        <div class="flex justify-end">
+                                            <Button
+                                                label="Editar"
+                                                icon="pi pi-pencil"
+                                                text
+                                                @click="editarEntrada(slotProps.item)"
+                                            />
+                                        </div>
+                                    </template>
+                                </Card>
+                            </template>
+                        </Timeline>
+                    </TabPanel>
+
+                    <TabPanel value="responsaveis">
+                        <Toolbar class="mb-4">
+                            <template #start>
+                                <Button label="Cadastrar Responsável" icon="pi pi-plus" class="p-button-success" @click="openNovoResponsavelDialog" />
+                            </template>
+                        </Toolbar>
+                        <DataTable :value="entidade.responsaveis" responsiveLayout="scroll">
+                            <Column field="pessoa_fisica.nome_completo" header="Nome" sortable></Column>
+                            <Column field="cargo" header="Cargo" sortable></Column>
+                            <Column field="pessoa_fisica.telefone" header="Telefone"></Column>
+                            <Column field="pessoa_fisica.email" header="E-mail"></Column>
+                            <Column headerStyle="width: 12rem; text-align: center" header="Ações">
+                                <template #body="slotProps">
+                                    <Button icon="pi pi-pencil" outlined rounded class="mr-2" @click="editResponsavel(slotProps.data)" />
+                                    <Button icon="pi pi-trash" outlined rounded severity="danger" @click="confirmRemoverVinculo('responsável', slotProps.data)" />
+                                </template>
+                            </Column>
+                        </DataTable>
+                    </TabPanel>
+                    
+                    <TabPanel v-if="entidade.eh_gestor" value="beneficiados">
+                        <Toolbar class="mb-4">
+                            <template #start>
+                                <Button label="Cadastrar Beneficiado" icon="pi pi-plus" class="p-button-success" @click="openNovoBeneficiadoDialog" />
+                            </template>
+                        </Toolbar>
+                        <DataTable :value="entidade.beneficiarios" responsiveLayout="scroll">
+                            <Column field="pessoa_fisica.nome_completo" header="Nome" sortable></Column>
+                            <Column field="pessoa_fisica.cpf" header="CPF" sortable></Column>
+                            <Column field="pessoa_fisica.telefone" header="Telefone"></Column>
+                            <Column headerStyle="width: 12rem; text-align: center" header="Ações">
+                                <template #body="slotProps">
+                                    <Button icon="pi pi-pencil" outlined rounded class="mr-2" @click="editBeneficiado(slotProps.data)" />
+                                    <Button icon="pi pi-trash" outlined rounded severity="danger" @click="confirmRemoverVinculo('beneficiado', slotProps.data)" />
+                                </template>
+                            </Column>
+                        </DataTable>
+                    </TabPanel>
+                </TabPanels>
+            </Tabs>
         </div>
         
         <div class="card text-center" v-else>
@@ -864,7 +951,7 @@ const abrirEmNovaAba = (name, params) => {
                 <Button label="Salvar" icon="pi pi-check" @click="saveBeneficiado" />
             </template>
         </Dialog>
-        <OverlayPanel ref="op">
+        <Popover ref="op">
             <DataTable :value="overlayItems.itens_doados || overlayItems.itens_saida || []">
                 <Column field="item.nome" header="Item"></Column>
                 <Column field="quantidade" header="Qtd"></Column>
@@ -873,7 +960,7 @@ const abrirEmNovaAba = (name, params) => {
                 <Column field="kit.nome" header="Kit"></Column>
                 <Column field="quantidade" header="Qtd"></Column>
             </DataTable>
-        </OverlayPanel>
+        </Popover>
     </div>
 </template>
 

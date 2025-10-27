@@ -52,6 +52,33 @@ const fetchEntidadeById = async (id) => {
     }
 };
 
+const parseAPIDate = (dateString) => {
+    if (!dateString) return null;
+
+    // Pega apenas a parte da data (ignora hora, se houver)
+    const dateOnlyString = dateString.split('T')[0];
+    
+    const parts = dateOnlyString.split('-');
+    
+    if (parts.length === 3) {
+        const year = parseInt(parts[0], 10);
+        const monthIndex = parseInt(parts[1], 10) - 1; // Mês é 0-indexado
+        const day = parseInt(parts[2], 10);
+        
+        if (!isNaN(year) && !isNaN(monthIndex) && !isNaN(day)) {
+            // Cria a data na hora local
+            return new Date(year, monthIndex, day);
+        }
+    }
+    
+    // Fallback para o caso de um formato que o JS já entenda (ex: ISO completa)
+    const dt = new Date(dateString);
+    if (!isNaN(dt.getTime())) return dt;
+
+    console.warn('Falha ao fazer parse da data:', dateString);
+    return null; // Retorna null se tudo falhar
+};
+
 const loadSaida = async (id) => {
     // 4. USAMOS 'api.get' COM CAMINHO RELATIVO
     const { data } = await api.get(`/doacoes-realizadas/${id}/`);
@@ -65,7 +92,7 @@ const loadSaida = async (id) => {
         : [];
 
     novaSaida.value = {
-        data_saida: data.data_saida ? new Date(data.data_saida) : new Date(),
+        data_saida: data.data_saida ? (parseAPIDate(data.data_saida) || new Date()) : new Date(),
         entidade_gestora: entidadeObj,
         itens_saida: itens,
         kits_saida: kits,
@@ -286,7 +313,7 @@ const saveSaida = async () => {
 
             <div class="col-span-12 md:col-span-4">
             <label class="block font-semibold mb-2">Data da Entrega</label>
-            <Calendar v-model="novaSaida.data_saida" dateFormat="dd/mm/yy" fluid />
+            <DatePicker v-model="novaSaida.data_saida" dateFormat="dd/mm/yy" fluid />
             </div>
 
             <div class="col-span-12">

@@ -101,6 +101,30 @@ const fetchData = async () => {
     }
 };
 
+const getPrincipalTelefone = (contatos) => {
+    if (!Array.isArray(contatos) || contatos.length === 0) {
+        return '-'; // Retorna '-' se não houver contatos
+    }
+
+    const telefones = contatos.filter(c => c.tipo_contato === 'T');
+
+    if (telefones.length === 0) {
+        return '-'; // Retorna '-' se não houver telefones
+    }
+
+    // Tenta encontrar um telefone cuja descrição contenha "principal" (ignorando maiúsculas/minúsculas)
+    const principal = telefones.find(t => 
+        t.descricao && t.descricao.toLowerCase().includes('principal')
+    );
+
+    if (principal) {
+        return maskPhone(principal.valor); // Usa a máscara existente
+    }
+
+    // Se não encontrar principal, retorna o primeiro telefone da lista
+    return maskPhone(telefones[0].valor); // Usa a máscara existente
+};
+
 onMounted(() => {
     fetchData();
     api.get('/categorias/')
@@ -470,10 +494,9 @@ const exportCSV = () => {
                         <Tag v-if="slotProps.data.eh_gestor" value="Gestor" severity="info"></Tag>
                     </template>
                 </Column>
-                <Column header="Contatos" style="min-width: 10rem">
+                <Column header="Telefone Principal" style="min-width: 12rem"> {/* Pode ajustar o header e min-width */}
                     <template #body="{ data }">
-                        <Tag v-if="data.contatos" :value="`${data.contatos.filter(c=>c.tipo_contato==='T').length} Tel`" class="mr-2" />
-                        <Tag v-if="data.contatos" :value="`${data.contatos.filter(c=>c.tipo_contato==='E').length} Email`" />
+                        {{ getPrincipalTelefone(data.contatos) }}
                     </template>
                 </Column>
                 <Column field="bairro" header="Bairro" sortable style="min-width: 16rem"></Column>

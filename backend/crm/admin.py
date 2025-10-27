@@ -9,7 +9,7 @@ from django.utils.crypto import get_random_string
 from django.http import HttpResponse
 from django.db.models import Q
 from .models import (
-    CategoriaEntidade, Entidade, Contato,
+    Alerta, CategoriaEntidade, Entidade, Contato,
     PessoaFisica, Responsavel, Beneficiario
 )
 import csv
@@ -89,6 +89,26 @@ class BeneficiarioInline(admin.TabularInline):
 # =========================
 # ADMINS
 # =========================
+
+@admin.register(Alerta)
+class AlertaAdmin(admin.ModelAdmin):
+    """
+    Configuração da interface de administração para o modelo Alerta.
+    """
+    list_display = ('titulo', 'entidade', 'severity', 'lido', 'criado_em')
+    list_filter = ('lido', 'severity', 'entidade__nome_fantasia')
+    search_fields = ('titulo', 'mensagem', 'entidade__nome_fantasia')
+    readonly_fields = ('criado_em',)
+    list_per_page = 25
+
+    fieldsets = (
+        (None, {
+            'fields': ('titulo', 'mensagem', 'entidade', 'severity', 'lido')
+        }),
+        ('Datas', {
+            'fields': ('criado_em',)
+        }),
+    )
 
 @admin.register(CategoriaEntidade)
 class CategoriaEntidadeAdmin(admin.ModelAdmin):
@@ -206,7 +226,6 @@ def send_new_password(modeladmin, request, queryset):
                 'user_name': user.first_name or user.username,
                 'password': password,
                 'introductory_text': 'Conforme solicitado, uma nova senha de acesso foi gerada para você pelo administrador do sistema.',
-                # CORREÇÃO: Construindo a URL do logo de forma explícita e completa
                 'logo_url': f"{base_url}/static/crm/images/logo_sgfs.png",
                 'login_url': f"{base_url}/login"
             }

@@ -100,7 +100,9 @@ const router = createRouter({
             children: [
                 { path: 'entidades', name: 'RelatorioEntidades', component: () => import('@/views/relatorios/RelatorioEntidades.vue') },
                 { path: 'entidade/:id', name: 'RelatorioEntidade', component: () => import('@/views/relatorios/RelatorioEntidade.vue'), props: true },
+                { path: 'entradas', name: 'RelatorioEntradas', component: () => import('@/views/relatorios/RelatorioEntradas.vue'), props: true },
                 { path: 'entrada/:id', name: 'RelatorioEntrada', component: () => import('@/views/relatorios/RelatorioEntrada.vue'), props: true },
+                { path: 'saidas', name: 'RelatorioSaidas', component: () => import('@/views/relatorios/RelatorioSaidas.vue'), props: true },
                 { path: 'saida/:id', name: 'RelatorioSaida', component: () => import('@/views/relatorios/RelatorioSaida.vue'), props: true }
             ]
         },

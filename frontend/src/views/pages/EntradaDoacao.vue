@@ -103,6 +103,33 @@ const fetchEntidadeById = async (id) => {
     }
 };
 
+const parseAPIDate = (dateString) => {
+    if (!dateString) return null;
+
+    // Pega apenas a parte da data (ignora hora, se houver)
+    const dateOnlyString = dateString.split('T')[0];
+    
+    const parts = dateOnlyString.split('-');
+    
+    if (parts.length === 3) {
+        const year = parseInt(parts[0], 10);
+        const monthIndex = parseInt(parts[1], 10) - 1; // Mês é 0-indexado
+        const day = parseInt(parts[2], 10);
+        
+        if (!isNaN(year) && !isNaN(monthIndex) && !isNaN(day)) {
+            // Cria a data na hora local
+            return new Date(year, monthIndex, day);
+        }
+    }
+    
+    // Fallback para o caso de um formato que o JS já entenda (ex: ISO completa)
+    const dt = new Date(dateString);
+    if (!isNaN(dt.getTime())) return dt;
+
+    console.warn('Falha ao fazer parse da data:', dateString);
+    return null; // Retorna null se tudo falhar
+};
+
 // ---- carregar (prefill/edição) ----
 onMounted(async () => {
     const q = route.query;
@@ -125,7 +152,7 @@ onMounted(async () => {
 
             const doadorEntidade = await fetchEntidadeById(d.object_id);
 
-            novaDoacao.value.data_doacao = d.data_doacao ? new Date(d.data_doacao) : new Date();
+            novaDoacao.value.data_doacao = d.data_doacao ? (parseAPIDate(d.data_doacao) || new Date()) : new Date();
             novaDoacao.value.observacoes = d.observacoes || '';
             novaDoacao.value.doador = doadorEntidade ? doadorEntidade : { id: d.object_id, nome: '' };
             
